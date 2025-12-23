@@ -1,0 +1,70 @@
+# NGFW Best Practice Assessment – Control Registry
+# Offline / Air-Gapped Safe
+# CIS Palo Alto Networks Firewall Benchmark aligned
+
+controls:
+
+  # =========================
+  # Security Policy Controls
+  # =========================
+
+  - id: PANW-BP-POL-APP-ANY
+    title: Application Any Used in Allow Rule
+    category: Security Policy
+    severity: High
+    cis_level: 1
+    recommendation: Restrict rules to specific applications using App-ID
+    check: check_app_any
+
+  - id: PANW-BP-POL-SVC-ANY
+    title: Service Any Used in Allow Rule
+    category: Security Policy
+    severity: High
+    cis_level: 1
+    recommendation: Restrict services to required ports and protocols
+    check: check_service_any
+
+  - id: PANW-BP-POL-ZONE-ANY
+    title: Any Zone Used in Allow Rule
+    category: Security Policy
+    severity: High
+    cis_level: 1
+    recommendation: Avoid using 'any' zone; explicitly define source and destination zones
+    check: check_zone_any
+
+  - id: PANW-BP-POL-LOG-END
+    title: Log at Session End Not Enabled
+    category: Security Policy
+    severity: Medium
+    cis_level: 1
+    recommendation: Enable logging at session end for all allow rules
+    check: check_log_end
+
+
+  # =========================
+  # Security Profile Controls
+  # =========================
+
+  - id: PANW-BP-POL-NO-AV
+    title: Missing Anti-Virus Profile
+    category: Security Profiles
+    severity: High
+    cis_level: 1
+    recommendation: Apply an Anti-Virus profile to all allow rules
+    check: check_missing_av_profile
+
+  - id: PANW-BP-POL-NO-AS
+    title: Missing Anti-Spyware Profile
+    category: Security Profiles
+    severity: High
+    cis_level: 1
+    recommendation: Apply an Anti-Spyware profile to all allow rules
+    check: check_missing_spyware_profile
+
+  - id: PANW-BP-POL-NO-VP
+    title: Missing Vulnerability Protection Profile
+    category: Security Profiles
+    severity: High
+    cis_level: 1
+    recommendation: Apply a Vulnerability Protection profile to all allow rules
+    check: check_missing_vuln_profile
