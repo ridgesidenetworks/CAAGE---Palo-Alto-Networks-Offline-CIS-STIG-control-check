@@ -1,6 +1,11 @@
 .DS_Store
+__pycache__/
+*.pyc
 
 # Local/sample configs
 test.xml
 testDec.xml
 testdec22.xml
+
+# Local reference extracts
+reports/
