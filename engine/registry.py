@@ -19,6 +19,7 @@ from engine.checks import (
     check_login_banner_set,
     check_admin_lockout_failed_attempts_3,
     check_only_one_local_admin,
+    check_mgmt_ssl_tls_certificate_set,
     check_manual,
 
     # CIS password checks
@@ -33,6 +34,8 @@ from engine.checks import (
 
     # CIS logging checks
     check_syslog_configured,
+    check_syslog_hostname_or_fqdn,
+    check_admin_lockout_requires_release,
     check_snmpv3_traps_configured,
     check_log_high_dp_load_enabled,
     check_alarms_enabled,
@@ -100,6 +103,8 @@ from engine.checks import (
     check_spyware_dns_sinkhole,
     check_vp_blocks_critical_high,
     check_url_filtering_on_rules,
+    check_url_filtering_block_override_categories,
+    check_url_filtering_no_allow_categories,
     check_url_http_header_logging,
     check_vp_inline_cloud_analysis,
     check_url_cloud_inline_categorization,
@@ -210,6 +215,7 @@ CONTROL_REGISTRY = [
         "category": "Administrative Access",
         "severity": "Medium",
         "framework": "PANW",
+        "frameworks": ["PANW", "CIS"],
         "section": "Best Practice - Administrative Access",
         "cis_level": 1,
         "recommendation": "Restrict management access to permitted IP addresses.",
@@ -406,8 +412,7 @@ CONTROL_REGISTRY = [
         "recommendation": (
             "Configure syslog to include hostname or FQDN for event sources."
         ),
-        "manual": True,
-        "check": check_manual,
+        "check": check_syslog_hostname_or_fqdn,
         "stig_ids": ["PANW-NM-000029"],
     },
     {
@@ -462,8 +467,7 @@ CONTROL_REGISTRY = [
         "section": "STIG Authentication",
         "cis_level": 0,
         "recommendation": "Require admin release for locked accounts.",
-        "manual": True,
-        "check": check_manual,
+        "check": check_admin_lockout_requires_release,
         "stig_ids": ["PANW-NM-000092"],
     },
     {
@@ -575,6 +579,21 @@ CONTROL_REGISTRY = [
         "cis_level": 1,
         "recommendation": "Disable HTTP and Telnet on all interface management profiles.",
         "check": check_mgmt_profile_http_telnet_disabled,
+    },
+    {
+        "id": "CIS-PA-1.2.5",
+        "display_id": "CIS 1.2.5",
+        "title": "Valid Certificate Set for Browser-Based Admin Interface",
+        "category": "Management Interface",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 1.2 Management Interface",
+        "cis_level": 1,
+        "recommendation": (
+            "Configure an SSL/TLS service profile with a valid certificate for the "
+            "management interface and verify certificate trust and validity."
+        ),
+        "check": check_mgmt_ssl_tls_certificate_set,
     },
     {
         "id": "CIS-PA-1.3.1",
@@ -1115,6 +1134,37 @@ CONTROL_REGISTRY = [
         "scope": "rules",
     },
     {
+        "id": "CIS-PA-6.9",
+        "display_id": "CIS 6.9",
+        "title": "URL Filtering Blocks or Overrides Risk Categories",
+        "category": "URL Filtering",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Set URL Filtering categories to block or override: adult, hacking, "
+            "command-and-control, copyright-infringement, extremism, malware, "
+            "phishing, proxy-avoidance-and-anonymizers, and parked."
+        ),
+        "check": check_url_filtering_block_override_categories,
+    },
+    {
+        "id": "CIS-PA-6.10",
+        "display_id": "CIS 6.10",
+        "title": "Access to Every URL is Logged",
+        "category": "URL Filtering",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Ensure no URL categories are set to allow; use at least alert "
+            "or stricter actions."
+        ),
+        "check": check_url_filtering_no_allow_categories,
+    },
+    {
         "id": "CIS-PA-6.15",
         "display_id": "CIS 6.15",
         "title": "Zone Protection SYN Cookies Enabled on Untrusted Zones",
@@ -1249,5 +1299,44 @@ CONTROL_REGISTRY = [
         "recommendation": "Enable log at session end on intrazone-default and interzone-default.",
         "check": check_default_policy_logging,
         "scope": "rules",
+    },
+    {
+        "id": "CIS-PA-8.1",
+        "display_id": "CIS 8.1",
+        "title": "SSL Forward Proxy Policy Configured for Internet Traffic",
+        "category": "Decryption",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 8 Decryption",
+        "cis_level": 1,
+        "recommendation": "Configure SSL Forward Proxy policies for Internet-bound traffic.",
+        "manual": True,
+        "check": check_manual,
+    },
+    {
+        "id": "CIS-PA-8.2",
+        "display_id": "CIS 8.2",
+        "title": "SSL Inbound Inspection Required for Untrusted SSL/TLS Servers",
+        "category": "Decryption",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 8 Decryption",
+        "cis_level": 1,
+        "recommendation": "Require SSL Inbound Inspection for untrusted traffic to SSL/TLS servers.",
+        "manual": True,
+        "check": check_manual,
+    },
+    {
+        "id": "CIS-PA-8.3",
+        "display_id": "CIS 8.3",
+        "title": "Certificate Used for Decryption is Trusted",
+        "category": "Decryption",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 8 Decryption",
+        "cis_level": 1,
+        "recommendation": "Ensure the decryption certificate is valid and trusted.",
+        "manual": True,
+        "check": check_manual,
     },
 ]

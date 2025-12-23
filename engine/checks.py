@@ -1,4 +1,5 @@
 from typing import List, Dict, Any
+import ipaddress
 
 
 def _rule_base(rule) -> Dict[str, Any]:
@@ -277,6 +278,62 @@ def check_mgmt_profile_http_telnet_disabled(xml_root, rules):
 
     return failures
 
+
+def check_mgmt_ssl_tls_certificate_set(xml_root, rules):
+    profile_name = _first_xpath_text(
+        xml_root,
+        [
+            "/config/devices/entry/deviceconfig/system/ssl-tls-service-profile",
+            "/config/mgt-config/ssl-tls-service-profile",
+        ],
+    )
+
+    if not profile_name:
+        return [_setting_finding(
+            "ssl-tls-service-profile",
+            "set",
+            "",
+            reason=(
+                "No SSL/TLS service profile is configured for the management interface. "
+                "Also verify that the certificate is valid and trusted."
+            ),
+        )]
+
+    profile = None
+    profile_paths = [
+        f"/config/shared/ssl-tls-service-profile/entry[@name='{profile_name}']",
+        f"/config/devices/entry/ssl-tls-service-profile/entry[@name='{profile_name}']",
+    ]
+    for path in profile_paths:
+        match = xml_root.xpath(path)
+        if match:
+            profile = match[0]
+            break
+
+    if profile is None:
+        return [_setting_finding(
+            "ssl-tls-service-profile",
+            "valid profile",
+            profile_name,
+            reason=(
+                "The SSL/TLS service profile referenced by management is missing. "
+                "Also verify that the certificate is valid and trusted."
+            ),
+        )]
+
+    cert_name = profile.findtext("./certificate")
+    if not cert_name:
+        return [_setting_finding(
+            f"ssl-tls-service-profile {profile_name} certificate",
+            "set",
+            "",
+            reason=(
+                "No certificate is configured in the SSL/TLS service profile. "
+                "Also verify that the certificate is valid and trusted."
+            ),
+        )]
+
+    return []
 
 def check_login_banner_dod(xml_root, rules):
     banner = _first_xpath_text(
@@ -670,6 +727,18 @@ def _profile_entry_map(xml_root, profile_type):
         if entry.get("name")
     }
 
+
+def _auth_profile_map(xml_root):
+    profiles = []
+    profile_paths = [
+        "/config/devices/entry/deviceconfig/system/authentication-profile/entry",
+        "/config/shared/authentication-profile/entry",
+        "/config/devices/entry/authentication-profile/entry",
+    ]
+    for path in profile_paths:
+        profiles.extend(xml_root.xpath(path))
+    return {p.get("name"): p for p in profiles if p.get("name")}
+
 def _zone_entries(xml_root):
     return xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry")
 
@@ -901,6 +970,92 @@ def check_syslog_configured(xml_root, rules):
 
     return failures
 
+
+def check_syslog_hostname_or_fqdn(xml_root, rules):
+    servers = []
+    paths = [
+        "/config/devices/entry/deviceconfig/system/syslog/entry/server/entry/server",
+        "/config/devices/entry/deviceconfig/system/server-profiles/syslog/entry/server/entry/server",
+        "/config/shared/server-profiles/syslog/entry/server/entry/server",
+    ]
+
+    for path in paths:
+        servers.extend(xml_root.xpath(path))
+
+    values = [s.text.strip() for s in servers if s is not None and s.text]
+    if not values:
+        return [_setting_finding(
+            "syslog server profile",
+            "hostname or FQDN",
+            "",
+            reason="No syslog server entries found.",
+        )]
+
+    ip_only = []
+    for value in values:
+        try:
+            ipaddress.ip_address(value)
+            ip_only.append(value)
+        except ValueError:
+            continue
+
+    if ip_only:
+        return [_setting_finding(
+            "syslog server profile",
+            "hostname or FQDN",
+            ", ".join(ip_only),
+            reason="Syslog server entries should use hostnames/FQDNs, not raw IPs.",
+        )]
+
+    return []
+
+
+def check_admin_lockout_requires_release(xml_root, rules):
+    failures = []
+    profiles = _auth_profile_map(xml_root)
+    users = xml_root.xpath("/config/mgt-config/users/entry")
+
+    if not users:
+        return [_setting_finding(
+            "administrators",
+            "accounts configured",
+            "",
+        )]
+
+    for user in users:
+        name = user.get("name", "unknown")
+        if user.findtext("./disabled") == "yes":
+            continue
+        if name == "admin":
+            continue
+
+        auth_profile = user.findtext("./authentication-profile")
+        if not auth_profile:
+            failures.append(_setting_finding(
+                f"admin {name}",
+                "authentication profile assigned",
+                "",
+            ))
+            continue
+
+        profile = profiles.get(auth_profile)
+        if profile is None:
+            failures.append(_setting_finding(
+                f"admin {name} authentication-profile",
+                "valid profile",
+                auth_profile,
+            ))
+            continue
+
+        lockout_time = _xpath_text(profile, "./lockout-time")
+        if lockout_time != "0":
+            failures.append(_setting_finding(
+                f"admin {name} authentication-profile {auth_profile}",
+                "lockout-time=0",
+                lockout_time,
+            ))
+
+    return failures
 
 def check_log_high_dp_load_enabled(xml_root, rules):
     value = _first_xpath_text(
@@ -1974,6 +2129,103 @@ def check_url_filtering_on_rules(xml_root, rules):
             rule_info = _rule_base(rule)
             rule_info["reason"] = "URL filtering profile is not set."
             failures.append(rule_info)
+
+    return failures
+
+
+def check_url_filtering_block_override_categories(xml_root, rules):
+    required = {
+        "adult",
+        "hacking",
+        "command-and-control",
+        "copyright-infringement",
+        "extremism",
+        "malware",
+        "phishing",
+        "proxy-avoidance-and-anonymizers",
+        "parked",
+    }
+
+    groups = _profile_groups(xml_root)
+    profile_map = _profile_entry_map(xml_root, "url-filtering")
+    used_profiles = set()
+
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        profile = _rule_profile_name(rule, groups, "url-filtering")
+        if profile:
+            used_profiles.add(profile)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "in use",
+            "",
+        )]
+
+    failures = []
+    for name in sorted(used_profiles):
+        profile = profile_map.get(name)
+        if profile is None:
+            failures.append(_setting_finding(
+                f"url-filtering profile {name}",
+                "present",
+                "missing",
+            ))
+            continue
+
+        block = {m.text for m in profile.findall("./block/member") if m.text}
+        override = {m.text for m in profile.findall("./override/member") if m.text}
+        covered = block | override
+        missing = sorted(required - covered)
+        if missing:
+            failures.append(_setting_finding(
+                f"url-filtering profile {name}",
+                "block/override required categories",
+                f"missing: {', '.join(missing)}",
+            ))
+
+    return failures
+
+
+def check_url_filtering_no_allow_categories(xml_root, rules):
+    groups = _profile_groups(xml_root)
+    profile_map = _profile_entry_map(xml_root, "url-filtering")
+    used_profiles = set()
+
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        profile = _rule_profile_name(rule, groups, "url-filtering")
+        if profile:
+            used_profiles.add(profile)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "in use",
+            "",
+        )]
+
+    failures = []
+    for name in sorted(used_profiles):
+        profile = profile_map.get(name)
+        if profile is None:
+            failures.append(_setting_finding(
+                f"url-filtering profile {name}",
+                "present",
+                "missing",
+            ))
+            continue
+
+        allow = [m.text for m in profile.findall("./allow/member") if m.text]
+        if allow:
+            failures.append(_setting_finding(
+                f"url-filtering profile {name}",
+                "no categories set to allow",
+                f"allow: {', '.join(sorted(allow))}",
+            ))
 
     return failures
 
