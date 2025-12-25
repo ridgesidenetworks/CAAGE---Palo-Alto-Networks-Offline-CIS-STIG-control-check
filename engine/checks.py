@@ -234,19 +234,27 @@ def check_mgmt_http_telnet_disabled(xml_root, rules):
         xml_root,
         "/config/devices/entry/deviceconfig/system/service/disable-telnet"
     )
+    http_enabled = _xpath_text(
+        xml_root,
+        "/config/devices/entry/deviceconfig/system/service/http"
+    )
+    telnet_enabled = _xpath_text(
+        xml_root,
+        "/config/devices/entry/deviceconfig/system/service/telnet"
+    )
 
-    if disable_http != "yes":
+    if http_enabled == "yes" or disable_http == "no":
         failures.append(_setting_finding(
-            "deviceconfig/system/service/disable-http",
-            "yes",
-            disable_http,
+            "deviceconfig/system/service/http",
+            "not enabled",
+            "http=yes" if http_enabled == "yes" else "disable-http=no",
         ))
 
-    if disable_telnet != "yes":
+    if telnet_enabled == "yes" or disable_telnet == "no":
         failures.append(_setting_finding(
-            "deviceconfig/system/service/disable-telnet",
-            "yes",
-            disable_telnet,
+            "deviceconfig/system/service/telnet",
+            "not enabled",
+            "telnet=yes" if telnet_enabled == "yes" else "disable-telnet=no",
         ))
 
     return failures
@@ -395,6 +403,7 @@ def check_login_banner_dod(xml_root, rules):
             "login-banner",
             "DoD-approved banner",
             banner.strip(),
+            severity="warn",
             reason=(
                 "A banner is configured but does not exactly match the STIG "
                 "approved text. " + approved_notice
@@ -787,10 +796,27 @@ def check_password_min_special_1(xml_root, rules):
 
 
 def check_password_change_period_max_90(xml_root, rules):
-    return _password_max_value_check(
-        xml_root, "required-password-change-period", 90,
-        "Required Password Change Period"
+    value_text = _first_xpath_text(
+        xml_root,
+        [
+            "/config/mgt-config/password-change/expiration-period",
+            "/config/devices/entry/deviceconfig/system/password-change/expiration-period",
+            "//password-change/expiration-period",
+        ],
     )
+    try:
+        value = int(value_text) if value_text is not None else None
+    except ValueError:
+        value = None
+
+    if value is None or value > 90:
+        return [_setting_finding(
+            "password-change/expiration-period",
+            "<=90",
+            value_text,
+        )]
+
+    return []
 
 
 def check_password_differs_3(xml_root, rules):
@@ -947,12 +973,11 @@ def check_syslog_configured(xml_root, rules):
     profile_paths = [
         "/config/devices/entry/deviceconfig/system/syslog/entry",
         "/config/devices/entry/deviceconfig/system/server-profiles/syslog/entry",
+        "/config/shared/log-settings/syslog/entry",
         "/config/shared/server-profiles/syslog/entry",
     ]
-    log_setting_xpath = (
-        "//*[local-name()='log-settings']"
-        "//*[local-name()='syslog' or local-name()='send-syslog']"
-    )
+    log_settings = xml_root.xpath("//*[local-name()='log-settings']")
+    required_sections = ["system", "config", "userid", "hipmatch", "iptag"]
 
     if not _any_xpath_exists(xml_root, profile_paths):
         failures.append(_setting_finding(
@@ -961,53 +986,51 @@ def check_syslog_configured(xml_root, rules):
             "",
         ))
 
-    if not _xpath_exists(xml_root, log_setting_xpath):
-        failures.append(_setting_finding(
-            "log settings syslog forwarding",
-            "configured",
-            "",
-        ))
+    for section in required_sections:
+        members = set()
+        for node in log_settings:
+            members.update(
+                [m.text for m in node.xpath(
+                    f"./{section}/match-list/entry/send-syslog/member"
+                ) if m.text]
+            )
+
+        if not members:
+            failures.append(_setting_finding(
+                f"log-settings {section}",
+                "send-syslog configured",
+                "not set",
+            ))
 
     return failures
 
 
 def check_syslog_hostname_or_fqdn(xml_root, rules):
-    servers = []
-    paths = [
-        "/config/devices/entry/deviceconfig/system/syslog/entry/server/entry/server",
-        "/config/devices/entry/deviceconfig/system/server-profiles/syslog/entry/server/entry/server",
-        "/config/shared/server-profiles/syslog/entry/server/entry/server",
-    ]
+    value = _first_xpath_text(
+        xml_root,
+        [
+            "/config/devices/entry/deviceconfig/setting/management/"
+            "hostname-type-in-syslog",
+            "/config/mgt-config/hostname-type-in-syslog",
+        ],
+    )
 
-    for path in paths:
-        servers.extend(xml_root.xpath(path))
-
-    values = [s.text.strip() for s in servers if s is not None and s.text]
-    if not values:
+    if not value or not value.strip():
         return [_setting_finding(
-            "syslog server profile",
+            "hostname-type-in-syslog",
             "hostname or FQDN",
             "",
-            reason="No syslog server entries found.",
         )]
 
-    ip_only = []
-    for value in values:
-        try:
-            ipaddress.ip_address(value)
-            ip_only.append(value)
-        except ValueError:
-            continue
+    normalized = value.strip().lower()
+    if normalized in ("fqdn", "hostname"):
+        return []
 
-    if ip_only:
-        return [_setting_finding(
-            "syslog server profile",
-            "hostname or FQDN",
-            ", ".join(ip_only),
-            reason="Syslog server entries should use hostnames/FQDNs, not raw IPs.",
-        )]
-
-    return []
+    return [_setting_finding(
+        "hostname-type-in-syslog",
+        "hostname or FQDN",
+        value.strip(),
+    )]
 
 
 def check_admin_lockout_requires_release(xml_root, rules):
@@ -1178,23 +1201,15 @@ def check_audit_storage_alarms_75(xml_root, rules):
 
 
 def check_packet_buffer_protection_enabled(xml_root, rules):
-    base = (
-        "/config/devices/entry/deviceconfig/setting/session"
-    )
-    fields = [
-        "packet-buffer-protection-latency-alert",
-        "packet-buffer-protection-latency-activate",
-        "packet-buffer-protection-latency-max-tolerate",
-        "packet-buffer-protection-latency-block-countdown",
-    ]
-
     failures = []
-    for field in fields:
-        value = _xpath_text(xml_root, f"{base}/{field}")
-        if value is None or value == "0":
+    zones = xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry")
+    for zone in zones:
+        name = zone.get("name", "unknown")
+        value = zone.findtext("./network/enable-packet-buffer-protection")
+        if value == "no":
             failures.append(_setting_finding(
-                f"session/{field}",
-                "configured",
+                f"zone {name} enable-packet-buffer-protection",
+                "not disabled",
                 value,
             ))
 
@@ -1381,48 +1396,72 @@ def check_snmpv3_traps_configured(xml_root, rules):
     failures = []
 
     profile_paths = [
+        "/config/devices/entry/deviceconfig/system/log-settings/snmptrap/entry",
+        "/config/shared/log-settings/snmptrap/entry",
         "/config/devices/entry/deviceconfig/system/snmp-trap/entry",
         "/config/devices/entry/deviceconfig/system/server-profiles/snmp-trap/entry",
         "/config/shared/server-profiles/snmp-trap/entry",
     ]
-    log_setting_xpath = (
-        "//*[local-name()='log-settings']"
-        "//*[local-name()='snmp' or local-name()='snmp-trap' "
-        "or local-name()='send-snmp']"
-    )
 
     profiles = []
     for path in profile_paths:
         profiles.extend(xml_root.xpath(path))
 
-    if not profiles:
+    v3_profiles = set()
+    legacy_profiles = set()
+    for profile in profiles:
+        name = profile.get("name")
+        if not name:
+            continue
+        has_v3 = profile.find("./version/v3") is not None
+        has_legacy = profile.find("./version/v1") is not None
+        has_legacy = has_legacy or profile.find("./version/v2") is not None
+        has_legacy = has_legacy or profile.find("./version/v2c") is not None
+        if has_v3:
+            v3_profiles.add(name)
+        if has_legacy:
+            legacy_profiles.add(name)
+
+    if not profiles or not v3_profiles:
         failures.append(_setting_finding(
             "SNMP trap profile",
             "configured with v3",
-            "",
+            "not set",
         ))
-    else:
-        has_v3 = False
-        for profile in profiles:
-            version = profile.findtext("./version")
-            if version is None:
-                version = profile.findtext("./version/member")
-            if version and "3" in version:
-                has_v3 = True
-                break
-        if not has_v3:
-            failures.append(_setting_finding(
-                "SNMP trap profile",
-                "version v3",
-                version,
-            ))
-
-    if not _xpath_exists(xml_root, log_setting_xpath):
+    elif legacy_profiles:
         failures.append(_setting_finding(
-            "log settings SNMP forwarding",
-            "configured",
-            "",
+            "SNMP trap profile",
+            "v3 only",
+            ", ".join(sorted(legacy_profiles)),
         ))
+
+    log_settings = xml_root.xpath("//*[local-name()='log-settings']")
+    required_sections = ["system", "config", "userid", "hipmatch", "iptag"]
+
+    for section in required_sections:
+        members = set()
+        for node in log_settings:
+            members.update(
+                [m.text for m in node.xpath(
+                    f"./{section}/match-list/entry/send-snmptrap/member"
+                ) if m.text]
+            )
+
+        if not members:
+            failures.append(_setting_finding(
+                f"log-settings {section}",
+                "SNMPv3 trap profile",
+                "not set",
+            ))
+            continue
+
+        invalid = sorted(m for m in members if m not in v3_profiles)
+        if invalid:
+            failures.append(_setting_finding(
+                f"log-settings {section}",
+                "SNMPv3 trap profile",
+                ", ".join(invalid),
+            ))
 
     return failures
 
@@ -2481,6 +2520,7 @@ def check_idle_timeout_max_10(xml_root, rules):
         [
             "/config/devices/entry/deviceconfig/system/idle-timeout",
             "/config/devices/entry/deviceconfig/system/management/idle-timeout",
+            "/config/devices/entry/deviceconfig/setting/management/idle-timeout",
             "/config/mgt-config/idle-timeout",
             "/config/devices/entry/mgt-config/idle-timeout",
         ],
@@ -2522,8 +2562,20 @@ def check_auth_profile_lockout_configured(xml_root, rules):
     failures = []
     for profile in profiles:
         name = profile.get("name", "unknown")
-        failed_attempts = _xpath_text(profile, "./failed-attempts")
-        lockout_time = _xpath_text(profile, "./lockout-time")
+        failed_attempts = _first_xpath_text(
+            profile,
+            [
+                "./failed-attempts",
+                "./lockout/failed-attempts",
+            ],
+        )
+        lockout_time = _first_xpath_text(
+            profile,
+            [
+                "./lockout-time",
+                "./lockout/lockout-time",
+            ],
+        )
 
         try:
             failed_value = int(failed_attempts) if failed_attempts is not None else 0
@@ -2575,28 +2627,34 @@ def check_snmp_v1_v2_disabled(xml_root, rules):
     return []
 
 def check_snmp_polling_v3(xml_root, rules):
-    version = _first_xpath_text(
-        xml_root,
-        [
-            "/config/devices/entry/deviceconfig/system/snmp-setting/version",
-            "/config/devices/entry/deviceconfig/system/snmp/version",
-            "/config/devices/entry/deviceconfig/system/snmp-setup/version",
-            "/config/devices/entry/deviceconfig/system/snmp/setting/version",
-        ],
-    )
+    v3_paths = [
+        "/config/devices/entry/deviceconfig/system/snmp-setting/access-setting/version/v3",
+        "/config/devices/entry/deviceconfig/system/snmp/setting/access-setting/version/v3",
+    ]
+    legacy_paths = [
+        "/config/devices/entry/deviceconfig/system/snmp-setting/access-setting/version/v1",
+        "/config/devices/entry/deviceconfig/system/snmp-setting/access-setting/version/v2",
+        "/config/devices/entry/deviceconfig/system/snmp-setting/access-setting/version/v2c",
+        "/config/devices/entry/deviceconfig/system/snmp/setting/access-setting/version/v1",
+        "/config/devices/entry/deviceconfig/system/snmp/setting/access-setting/version/v2",
+        "/config/devices/entry/deviceconfig/system/snmp/setting/access-setting/version/v2c",
+    ]
 
-    if version is None:
+    v3_present = _any_xpath_exists(xml_root, v3_paths)
+    legacy_present = _any_xpath_exists(xml_root, legacy_paths)
+
+    if not v3_present:
         return [_setting_finding(
-            "SNMP polling version",
+            "snmp-setting/access-setting/version",
             "v3",
             "",
         )]
 
-    if "3" not in version:
+    if legacy_present:
         return [_setting_finding(
-            "SNMP polling version",
-            "v3",
-            version,
+            "snmp-setting/access-setting/version",
+            "v3 only",
+            "v1/v2 present",
         )]
 
     return []
@@ -2614,10 +2672,12 @@ def check_verify_update_server_identity(xml_root, rules):
             "/config/devices/entry/deviceconfig/system/verify-update-server",
             "/config/devices/entry/deviceconfig/system/verify-update-server-identity/enable",
             "/config/devices/entry/deviceconfig/system/update-server/verify-identity",
+            "/config/devices/entry/deviceconfig/system/update-server/server-verification",
+            "/config/devices/entry/deviceconfig/system/server-verification",
         ],
     )
 
-    if value != "yes":
+    if value == "no":
         return [_setting_finding(
             "verify-update-server-identity",
             "yes",

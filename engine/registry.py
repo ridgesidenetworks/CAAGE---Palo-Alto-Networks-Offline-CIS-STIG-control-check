@@ -874,7 +874,10 @@ CONTROL_REGISTRY = [
         "framework": "CIS",
         "section": "CIS 1.3 Password Requirements",
         "cis_level": 1,
-        "recommendation": "Set prevent password reuse limit to 24 or more.",
+        "recommendation": (
+            "Set prevent password reuse limit to 24 or more. "
+            "PAN-OS 11.2+ only."
+        ),
         "check": check_password_reuse_24,
     },
     {
@@ -1257,8 +1260,11 @@ CONTROL_REGISTRY = [
         "framework": "CIS",
         "section": "CIS 7 Security Policies",
         "cis_level": 1,
-        "recommendation": "Use application-specific allow rules for untrusted to trusted traffic.",
-        "check": check_app_specific_untrusted_to_trusted,
+        "recommendation": (
+            "Use application-specific allow rules and verify untrusted-to-trusted "
+            "policy intent aligns with your security requirements."
+        ),
+        "check": check_app_any,
         "scope": "rules",
     },
     {
