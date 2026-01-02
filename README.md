@@ -7,25 +7,16 @@ It evaluates firewall configuration XML files against best-practice and CIS-alig
 
 🔒 Key Features
 
-Fully offline / air-gapped
-
-No data egress — all processing happens locally
-
-Open source & auditable
-
-TLS-enabled UI
-
-Containerized for easy deployment
-
-Rule-level findings with expandable details
-
-Designed for regulated and classified environments
+- Fully offline / air-gapped
+- No data egress — all processing happens locally
+- Open source & auditable
+- Containerized for easy deployment
+- Rule-level findings with expandable details
+- Designed for regulated and classified environments
 
 ⚠️ Important Notice
 
-This is not an official Palo Alto Networks best practice assessment tool.
-The supported solution is available in Strata Cloud Manager:
-https://www.paloaltonetworks.com/network-security/strata-cloud-manager
+This is not an official Palo Alto Networks best practice assessment tool. The supported solution is available in Strata Cloud Manager: https://www.paloaltonetworks.com/network-security/strata-cloud-manager
 
 CAAGE provides guidance only. Results must be validated against your organization’s security requirements and controls.
 
@@ -33,53 +24,60 @@ CAAGE provides guidance only. Results must be validated against your organizatio
 
 CAAGE is designed for high-assurance environments:
 
-No telemetry
-
-No cloud dependencies
-
-No outbound network calls
-
-No configuration uploads
-
-No external APIs
+No telemetry - No cloud dependencies - No outbound network calls - No external APIs
 
 All files remain on the local system for the duration of analysis.
 
 📦 Repository Structure
 ```graphql
-panw-ngfw-bpa/
-├── app/                    # Application source code
-│   ├── main.py             # FastAPI entry point
-│   ├── engine/             # Evaluation logic
-│   ├── controls/           # Control registry (YAML)
-│   ├── templates/          # Jinja2 HTML UI
-│   └── assets/             # Logos and static files
-├── wheels/                 # Offline Python dependencies
-├── certs/                  # TLS certificates (external mount)
-├── Dockerfile              # Container build definition
-├── requirements.txt        # Python dependencies
-├── python-3.12-slim.tar    # Preloaded Python base image
-└── README.md
+panw-ngfw-bpa-airgap
+└── panw-ngfw-bpa
+    ├── app
+    │   ├── assets
+    │   │   ├── CAAGE.png
+    │   │   ├── panw-logo.svg
+    │   │   └── stig-shield.svg
+    │   ├── controls
+    │   │   ├── panw_policy.yaml
+    │   │   └── registry.yaml
+    │   ├── engine
+    │   │   ├── checks.py
+    │   │   ├── evaluator.py
+    │   │   ├── loader.py
+    │   │   └── registry.py
+    │   ├── main.py
+    │   └── templates
+    │       └── index.html
+    ├── Dockerfile
+    ├── python-3.12-slim.tar
+    ├── requirements.txt
+    └── wheels
+        ├── annotated_doc-0.0.4-py3-none-any.whl
+        ├── annotated_types-0.7.0-py3-none-any.whl
+        ├── anyio-4.12.0-py3-none-any.whl
+        ├── click-8.3.1-py3-none-any.whl
+        ├── fastapi-0.126.0-py3-none-any.whl
+        ├── h11-0.16.0-py3-none-any.whl
+        ├── idna-3.11-py3-none-any.whl
+        ├── jinja2-3.1.6-py3-none-any.whl
+        ├── lxml-6.0.2-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
+        ├── markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
+        ├── pydantic-2.12.5-py3-none-any.whl
+        ├── pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        ├── python_multipart-0.0.21-py3-none-any.whl
+        ├── starlette-0.50.0-py3-none-any.whl
+        ├── typing_extensions-4.15.0-py3-none-any.whl
+        ├── typing_inspection-0.4.2-py3-none-any.whl
+        └── uvicorn-0.38.0-py3-none-any.whl
 ```
 🧱 Air-Gapped Build Overview
 
 CAAGE supports fully offline container builds using:
 
-Pre-downloaded Python base image
-
-Local Python wheels
-
-No PyPI access
-
-No Debian repo access
-
-This is suitable for:
-
-Classified networks
-
-Restricted environments
-
-Customer-managed security enclaves
+- Pre-downloaded Python base image
+- Local Python wheels
+- No PyPI access
+- No Debian repo access
 
 🧰 Prerequisites (Target System)
 
@@ -124,14 +122,6 @@ sudo docker build \
   --network=none \
   -t caage:latest .
 ```
-
-This build:
-
-Uses local wheels only
-
-Makes zero external network calls
-
-Is fully deterministic
 
 ▶️ Step 5 — Run CAAGE with TLS Enabled
 ```bash
