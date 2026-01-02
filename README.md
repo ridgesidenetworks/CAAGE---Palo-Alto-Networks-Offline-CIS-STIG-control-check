@@ -147,7 +147,7 @@ sudo docker rm caage
 
 ==========FAQ========
 
-Q:  Why are you making me build the container, why can't you put it in a container repo like a normal person.
+Q:  Why are you making me build the container, why can't you put it in a container repo like a normal person./n
 A:  Building the container image yourself provides users the ability to scan and review all the components of the container prior to build.  This was done on purpose for high security environments.  Everything is transparent.
 
 Q: Why do I have to make my own cert?
