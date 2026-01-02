@@ -142,3 +142,16 @@ https://<host-ip>:8443
 sudo docker stop caage
 sudo docker rm caage
 ```
+
+
+
+==========FAQ========
+
+Q:  Why are you making me build the container, why can't you put it in a container repo like a normal person.
+A:  Building the container image yourself provides users the ability to scan and review all the components of the container prior to build.  This was done on purpose for high security environments.  Everything is transparent.
+
+Q: Why do I have to make my own cert?
+A: Shipping pre-made private keys exposed is not ideal, you can generate your own self signed certs as per the intructions or bring in your own trusted keys.
+
+Q: One of my checks is not working!
+A: This tool is built as an opensource best effort tool to help the community.  Feel free to reach out to me and I can see if I can resolve the issue and provide an update.  Source code is also available and you can add/modify any checks you want.
