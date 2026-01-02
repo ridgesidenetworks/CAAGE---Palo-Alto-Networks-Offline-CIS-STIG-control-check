@@ -18,7 +18,7 @@ It evaluates firewall configuration XML files against best-practice and CIS-alig
 
 This is not an official Palo Alto Networks best practice assessment tool. The supported solution is available in Strata Cloud Manager: https://www.paloaltonetworks.com/network-security/strata-cloud-manager
 
-CAAGE provides guidance only. Results must be validated against your organization’s security requirements and controls.
+CAAGE provides guidance only. Results must be validated against your organization’s security requirements and controls.  CAAGE can make mistakes and thus proper verification should take place.
 
 🛑 Data Privacy & Offline Operation
 
