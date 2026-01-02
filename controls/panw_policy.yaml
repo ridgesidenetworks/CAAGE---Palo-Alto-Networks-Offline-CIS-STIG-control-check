@@ -1,7 +1,0 @@
-- id: PANW-BP-POL-APP-ANY
-  framework: PANW
-  category: Security Policy
-  severity: High
-  recommendation: Restrict rules to specific applications
-  xpaths:
-    - /config/devices/entry/vsys/entry/rulebase/security/rules/entry
