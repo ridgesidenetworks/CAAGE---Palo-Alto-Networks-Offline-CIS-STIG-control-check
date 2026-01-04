@@ -87,12 +87,14 @@ Docker installed (docker.io or equivalent)
 
 No internet access required
 
-📁 Step 1 — Extract the Air-Gap Package
+Step 1 - Download tar.gz package from the release page
+
+📁 Step 2 — Extract the Air-Gap Package
 ```bash
 tar -xzf panw-ngfw-bpa-airgap.tar.gz
 cd panw-ngfw-bpa
 ```
-🐍 Step 2 — Load the Python Base Image (Offline)
+🐍 Step 3 — Load the Python Base Image (Offline)
 
 The package includes a pre-downloaded Python base image.
 ```bash
@@ -103,7 +105,7 @@ Verify:
 ```bash
 sudo docker images | grep python
 ```
-🔐 Step 3 — Create TLS Certificates (Outside the Container)
+🔐 Step 4 — Create TLS Certificates (Outside the Container)
 
 CAAGE expects certificates to be mounted at runtime, not baked into the image.
 ```bash
@@ -115,7 +117,7 @@ openssl req -x509 -newkey rsa:4096 \
   -nodes \
   -subj "/CN=caage.local"
 ```
-🏗️ Step 4 — Build the Container Image (Offline)
+🏗️ Step 5 — Build the Container Image (Offline)
 ```bash
 sudo docker build \
   --no-cache \
@@ -123,7 +125,7 @@ sudo docker build \
   -t caage:latest .
 ```
 
-▶️ Step 5 — Run CAAGE with TLS Enabled
+▶️ Step 6 — Run CAAGE with TLS Enabled
 ```bash
 sudo docker run -d \
   --name caage \
