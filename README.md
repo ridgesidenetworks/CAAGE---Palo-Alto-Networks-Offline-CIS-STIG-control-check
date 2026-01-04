@@ -141,7 +141,17 @@ sudo docker run -d \
   -v $(pwd)/certs:/certs:ro \
   caage:latest
 ```
-
+Note! If you get errors its likely that the container cannot mount your certs directory.  The below will run the container as your current user which likely made the cert files.
+***ONLY RUN THIS IF THE ABOVE DOCKER RUN Failed***
+```bash
+sudo docker run -d \
+  --name caage \
+  --user $(id -u):$(id -g) \
+  --restart unless-stopped \
+  -p 8443:8443 \
+  -v $(pwd)/certs:/certs:ro \
+  caage:latest
+```
 Access the UI:
 ```bash
 
