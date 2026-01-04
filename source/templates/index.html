@@ -345,6 +345,22 @@
       border-color: transparent;
     }
 
+    .cloud-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px dashed #d6d6d6;
+      background: #fff;
+      font-size: 13px;
+      color: #444;
+    }
+
+    .cloud-toggle input {
+      accent-color: var(--accent);
+    }
+
     .site-footer {
       margin: 30px 0 10px;
       padding-top: 16px;
@@ -774,6 +790,51 @@
         exportBtn.addEventListener("click", exportCsv);
       }
 
+      const cloudToggle = document.getElementById("exclude-cloud");
+      if (cloudToggle) {
+        const isCloudCheck = (control) => {
+          const id = control.dataset.id || "";
+          if (id.startsWith("CIS-PA-5.")) {
+            return true;
+          }
+          return id === "CIS-PA-6.22"
+            || id === "CIS-PA-6.23"
+            || id === "CIS-PA-6.24"
+            || id === "CIS-PA-6.9";
+        };
+
+        cloudToggle.addEventListener("change", () => {
+          document.querySelectorAll(".control").forEach((control) => {
+            if (!isCloudCheck(control)) {
+              return;
+            }
+            const checkbox = control.querySelector(".exclude-input");
+            const priorExcluded = control.dataset.excluded === "true";
+            if (cloudToggle.checked) {
+              if (control.dataset.cloudExcluded !== "true") {
+                control.dataset.excludeBackup = priorExcluded ? "true" : "false";
+              }
+              control.dataset.excluded = "true";
+              control.dataset.cloudExcluded = "true";
+              control.classList.toggle("excluded", true);
+              if (checkbox) {
+                checkbox.checked = true;
+              }
+            } else if (control.dataset.cloudExcluded === "true") {
+              const restore = control.dataset.excludeBackup === "true";
+              control.dataset.excluded = restore ? "true" : "false";
+              control.classList.toggle("excluded", restore);
+              if (checkbox) {
+                checkbox.checked = restore;
+              }
+              delete control.dataset.cloudExcluded;
+              delete control.dataset.excludeBackup;
+            }
+          });
+          recalcSummary(getActiveFilter());
+        });
+      }
+
       document.querySelectorAll(".exclude-input").forEach((input) => {
         input.addEventListener("change", () => {
           const control = input.closest(".control");
@@ -804,9 +865,6 @@
       <div class="brand-title">
         <span class="tagline-strong">Air-gapped CIS + STIG + PANW best practice review for PAN-OS configs (NGFW only; Panorama not supported)</span>
         <span class="feature-tag">Offline by Design: This tool runs entirely self-hosted. No data leaves the system, and no internet connectivity is required.</span>
-      </div>
-      <div class="panw-badge">
-        <img src="{{ url_for('assets', path='panw-logo.svg') }}" alt="Palo Alto Networks logo">
       </div>
     </div>
     <form class="upload" method="post" enctype="multipart/form-data" action="/assess">
@@ -894,6 +952,10 @@
   <button type="button" class="active" data-filter="all">All</button>
   <button type="button" data-filter="CIS">CIS</button>
   <button type="button" data-filter="STIG">STIG</button>
+  <label class="cloud-toggle">
+    <input type="checkbox" id="exclude-cloud">
+    Exclude all checks that require cloud connectivity (CDSS)
+  </label>
   <button type="button" class="export-btn" id="export-csv">Export CSV</button>
 </div>
 
@@ -947,7 +1009,7 @@
     <p><strong>Recommendation:</strong> {{ c.recommendation }}</p>
 
     {% if c.findings %}
-      <h4>Failing Rules</h4>
+      <h4>{{ "Rules for review" if c.id in ["CIS-PA-6.15", "CIS-PA-6.16", "CIS-PA-6.18"] else "Failing Rules" }}</h4>
 
       {% for r in c.findings %}
       <div class="rule">
