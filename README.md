@@ -87,7 +87,10 @@ Docker installed (docker.io or equivalent)
 
 No internet access required
 
-Step 1 - Download tar.gz package from the release page
+Step 1 - Download tar.gz package from the release page here: 
+```text
+https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1/panw-ngfw-bpa-airgap.tar.gz
+```
 
 📁 Step 2 — Extract the Air-Gap Package
 ```bash
