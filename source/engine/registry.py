@@ -1176,7 +1176,13 @@ CONTROL_REGISTRY = [
         "framework": "CIS",
         "section": "CIS 6 Threat Prevention",
         "cis_level": 1,
-        "recommendation": "Attach a zone protection profile with SYN cookies enabled to untrusted zones.",
+        "recommendation": (
+            "This check will return a warning even when applied because administrator "
+            "should validate its applied to the needed untrusted intefaces and values "
+            "should be custimized to the organization. Verify Alert is appropriate for org. "
+            "Verify Activate is 50% of maximum for firewall model. Verify Maximum is "
+            "appropriate for org."
+        ),
         "check": check_zone_protection_syn_cookies,
     },
     {
@@ -1188,7 +1194,11 @@ CONTROL_REGISTRY = [
         "framework": "CIS",
         "section": "CIS 6 Threat Prevention",
         "cis_level": 1,
-        "recommendation": "Enable tuned flood protection for all flood types on untrusted zones.",
+        "recommendation": (
+            "This check will return a warning even when applied because administrator "
+            "should validate its applied to the needed untrusted intefaces and values "
+            "should be custimized to the organization."
+        ),
         "check": check_zone_protection_flood_enabled,
     },
     {
@@ -1212,7 +1222,11 @@ CONTROL_REGISTRY = [
         "framework": "CIS",
         "section": "CIS 6 Threat Prevention",
         "cis_level": 1,
-        "recommendation": "Enable drop settings for spoofed and malformed packets on zone protection profiles.",
+        "recommendation": (
+            "This check will return a warning even when applied because administrator "
+            "should validate its applied to the needed untrusted intefaces and values "
+            "should be custimized to the organization."
+        ),
         "check": check_zone_protection_drop_special,
     },
     {

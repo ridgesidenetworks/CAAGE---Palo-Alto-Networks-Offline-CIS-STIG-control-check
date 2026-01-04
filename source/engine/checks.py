@@ -1283,8 +1283,9 @@ def _zone_profile_for_zone(zone, profile_map):
 def check_zone_protection_syn_cookies(xml_root, rules):
     profile_map = _zone_protection_profile_map(xml_root)
     failures = []
+    has_syn_cookies = False
 
-    for zone in _untrusted_zones(xml_root):
+    for zone in xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry"):
         zone_name = zone.get("name", "unknown")
         profile_name, profile = _zone_profile_for_zone(zone, profile_map)
         if profile is None:
@@ -1292,6 +1293,15 @@ def check_zone_protection_syn_cookies(xml_root, rules):
                 f"zone {zone_name}",
                 "zone protection profile with SYN cookies",
                 "not set",
+                severity="warn",
+                reason=(
+                    "This check will return a warning even when applied because "
+                    "administrator should validate its applied to the needed "
+                    "untrusted intefaces and values should be custimized to the "
+                    "organization. Verify Alert is appropriate for org. Verify "
+                    "Activate is 50% of maximum for firewall model. Verify "
+                    "Maximum is appropriate for org."
+                ),
             ))
             continue
 
@@ -1300,13 +1310,31 @@ def check_zone_protection_syn_cookies(xml_root, rules):
         if tcp_syn is not None:
             action_syn_cookie = tcp_syn.find("./action/syn-cookie") is not None
         enabled = tcp_syn is not None and tcp_syn.findtext("./enable") == "yes"
+        syn_enabled = action_syn_cookie or enabled
+        if syn_enabled:
+            has_syn_cookies = True
 
-        if not action_syn_cookie and not enabled:
-            failures.append(_setting_finding(
-                f"zone {zone_name} profile {profile_name}",
-                "SYN cookies enabled",
-                "disabled",
-            ))
+        failures.append(_setting_finding(
+            f"zone {zone_name} profile {profile_name}",
+            "SYN cookies enabled",
+            "enabled" if syn_enabled else "disabled",
+            severity="warn",
+            reason=(
+                "This check will return a warning even when applied because "
+                "administrator should validate its applied to the needed "
+                "untrusted intefaces and values should be custimized to the "
+                "organization. Verify Alert is appropriate for org. Verify "
+                "Activate is 50% of maximum for firewall model. Verify "
+                "Maximum is appropriate for org."
+            ),
+        ))
+
+    if not has_syn_cookies:
+        return [_setting_finding(
+            "zone protection profiles",
+            "SYN cookies enabled",
+            "not enabled",
+        )]
 
     return failures
 
@@ -1314,10 +1342,11 @@ def check_zone_protection_syn_cookies(xml_root, rules):
 def check_zone_protection_flood_enabled(xml_root, rules):
     profile_map = _zone_protection_profile_map(xml_root)
     failures = []
+    has_flood = False
 
     flood_types = ["tcp-syn", "icmp", "icmpv6", "other-ip", "udp"]
 
-    for zone in _untrusted_zones(xml_root):
+    for zone in xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry"):
         zone_name = zone.get("name", "unknown")
         profile_name, profile = _zone_profile_for_zone(zone, profile_map)
         if profile is None:
@@ -1325,17 +1354,52 @@ def check_zone_protection_flood_enabled(xml_root, rules):
                 f"zone {zone_name}",
                 "zone protection profile with flood protection",
                 "not set",
+                severity="warn",
+                reason=(
+                    "This check will return a warning even when applied because administrator "
+                    "should validate its applied to the needed untrusted intefaces and values "
+                    "should be custimized to the organization."
+                ),
             ))
             continue
 
+        ok = True
         for flood_type in flood_types:
             enabled = profile.findtext(f"./flood/{flood_type}/enable")
             if enabled != "yes":
+                ok = False
                 failures.append(_setting_finding(
                     f"zone {zone_name} profile {profile_name}",
                     f"{flood_type} flood protection enabled",
                     enabled,
+                    severity="warn",
+                    reason=(
+                        "This check will return a warning even when applied because administrator "
+                        "should validate its applied to the needed untrusted intefaces and values "
+                        "should be custimized to the organization."
+                    ),
                 ))
+
+        if ok:
+            has_flood = True
+            failures.append(_setting_finding(
+                f"zone {zone_name} profile {profile_name}",
+                "flood protection enabled",
+                "enabled",
+                severity="warn",
+                reason=(
+                    "This check will return a warning even when applied because administrator "
+                    "should validate its applied to the needed untrusted intefaces and values "
+                    "should be custimized to the organization."
+                ),
+            ))
+
+    if not has_flood:
+        return [_setting_finding(
+            "zone protection profiles",
+            "flood protection enabled",
+            "not enabled",
+        )]
 
     return failures
 
@@ -1370,8 +1434,9 @@ def check_zone_protection_recon_enabled(xml_root, rules):
 def check_zone_protection_drop_special(xml_root, rules):
     profile_map = _zone_protection_profile_map(xml_root)
     failures = []
+    has_drop = False
 
-    for zone in _untrusted_zones(xml_root):
+    for zone in xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry"):
         zone_name = zone.get("name", "unknown")
         profile_name, profile = _zone_profile_for_zone(zone, profile_map)
         if profile is None:
@@ -1379,22 +1444,56 @@ def check_zone_protection_drop_special(xml_root, rules):
                 f"zone {zone_name}",
                 "zone protection profile with packet drop settings",
                 "not set",
+                severity="warn",
+                reason=(
+                    "This check will return a warning even when applied because administrator "
+                    "should validate its applied to the needed untrusted intefaces and values "
+                    "should be custimized to the organization."
+                ),
             ))
             continue
 
         checks = {
             "discard-ip-spoof": "yes",
             "discard-malformed-option": "yes",
-            "remove-tcp-timestamp": "yes",
         }
+        ok = True
         for field, expected in checks.items():
             actual = profile.findtext(f"./{field}")
             if actual != expected:
+                ok = False
                 failures.append(_setting_finding(
                     f"zone {zone_name} profile {profile_name}",
                     f"{field}={expected}",
                     actual,
+                    severity="warn",
+                    reason=(
+                        "This check will return a warning even when applied because administrator "
+                        "should validate its applied to the needed untrusted intefaces and values "
+                        "should be custimized to the organization."
+                    ),
                 ))
+
+        if ok:
+            has_drop = True
+            failures.append(_setting_finding(
+                f"zone {zone_name} profile {profile_name}",
+                "drop special packets enabled",
+                "enabled",
+                severity="warn",
+                reason=(
+                    "This check will return a warning even when applied because administrator "
+                    "should validate its applied to the needed untrusted intefaces and values "
+                    "should be custimized to the organization."
+                ),
+            ))
+
+    if not has_drop:
+        return [_setting_finding(
+            "zone protection profiles",
+            "drop special packets enabled",
+            "not enabled",
+        )]
 
     return failures
 
