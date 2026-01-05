@@ -181,6 +181,9 @@ Q:  Why are you making me build the container, why can't you put it in a contain
 A:  Building the container image yourself provides users the ability to scan and review all the components of the container prior to build.
     This was done on purpose for high security environments.  Everything is transparent.
 
+Q: Whats with all the cert permision commands, I don't normally do this when I run a container
+A: For security reasons the container does not run as root so we have to be explicit about permisions, your other containers probably run as root and they should feel bad
+
 Q: Why do I have to make my own cert?
 A: Shipping pre-made private keys exposed is not ideal, you can generate your own self signed certs as per the intructions or
    bring in your own trusted keys.
