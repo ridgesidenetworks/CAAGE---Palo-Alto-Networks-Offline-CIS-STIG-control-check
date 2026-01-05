@@ -1,6 +1,3 @@
-CAAGE
-
-Configuration Assessment for Air-Gapped Environments
 
 CAAGE (Configuration Assessment for Air-Gapped Environments) is an offline, self-hosted security configuration assessment tool for Palo Alto Networks NGFW configurations.
 It evaluates firewall configuration XML files against best-practice and CIS-aligned controls without sending any data off the system.
