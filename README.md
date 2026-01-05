@@ -125,6 +125,17 @@ openssl req -x509 -newkey rsa:4096 \
   -nodes \
   -subj "/CN=caage.local"
 ```
+🏗️ Step 5 — Adjust certificate permisions so container user can read them (UID/GID 10001)
+```bash
+# Change the group to match the container's internal ID
+sudo chgrp -R 10001 certs/
+
+# Secure the directory and key file
+sudo chmod 750 certs/             # Allows container to enter the directory
+sudo chmod 640 certs/server.key   # Allows container to read the key
+sudo chmod 644 certs/server.crt   # Standard read access for the cert
+```
+
 🏗️ Step 5 — Build the Container Image (Offline)
 ```bash
 sudo docker build \
