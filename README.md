@@ -99,8 +99,8 @@ wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS
 
 📁 Step 2 — Extract the Air-Gap Package
 ```bash
-tar -xzf panw-ngfw-bpa-airgap.tar.gz
-cd panw-ngfw-bpa
+tar -xzf caage.tar.gz
+cd caage
 ```
 🐍 Step 3 — Load the Python Base Image (Offline)
 
