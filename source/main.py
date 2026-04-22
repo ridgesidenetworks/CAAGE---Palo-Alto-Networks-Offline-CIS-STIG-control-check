@@ -113,6 +113,7 @@ def compute_policy_coverage(xml_bytes: bytes):
 async def index(request: Request):
     # IMPORTANT: always pass empty defaults
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
             "request": request,
@@ -127,6 +128,75 @@ async def index(request: Request):
 @app.post("/assess", response_class=HTMLResponse)
 async def assess(request: Request, file: UploadFile = File(...)):
     xml_bytes = await file.read()
+    max_size = 15 * 1024 * 1024
+    if not file.filename:
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "request": request,
+                "controls": [],
+                "grouped_controls": [],
+                "summary": None,
+                "coverage": None,
+                "upload_error": "Please upload a PAN-OS XML configuration file.",
+            },
+        )
+    if len(xml_bytes) > max_size:
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "request": request,
+                "controls": [],
+                "grouped_controls": [],
+                "summary": None,
+                "coverage": None,
+                "upload_error": "File is too large for processing.",
+            },
+        )
+    if not xml_bytes.lstrip().startswith(b"<") or b"<config" not in xml_bytes:
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "request": request,
+                "controls": [],
+                "grouped_controls": [],
+                "summary": None,
+                "coverage": None,
+                "upload_error": "Uploaded file does not look like a PAN-OS XML config.",
+            },
+        )
+    if b"<!DOCTYPE" in xml_bytes.upper() or b"<!ENTITY" in xml_bytes.upper():
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "request": request,
+                "controls": [],
+                "grouped_controls": [],
+                "summary": None,
+                "coverage": None,
+                "upload_error": "XML with DOCTYPE or ENTITY declarations is not allowed.",
+            },
+        )
+    try:
+        parser = etree.XMLParser(resolve_entities=False, no_network=True)
+        etree.fromstring(xml_bytes, parser=parser)
+    except etree.XMLSyntaxError:
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "request": request,
+                "controls": [],
+                "grouped_controls": [],
+                "summary": None,
+                "coverage": None,
+                "upload_error": "Invalid XML file. Please upload a PAN-OS config.",
+            },
+        )
 
     controls = evaluate_controls(xml_bytes)
     summary = summarize(controls)
@@ -134,6 +204,7 @@ async def assess(request: Request, file: UploadFile = File(...)):
     coverage = compute_policy_coverage(xml_bytes)
 
     return templates.TemplateResponse(
+        request,
         "index.html",
         {
             "request": request,
