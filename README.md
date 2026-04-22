@@ -35,7 +35,6 @@ panw-ngfw-bpa-airgap
     ├── app
     │   ├── assets
     │   │   ├── CAAGE.png
-    │   │   ├── panw-logo.svg
     │   │   └── stig-shield.svg
     │   ├── controls
     │   │   ├── panw_policy.yaml
@@ -45,30 +44,30 @@ panw-ngfw-bpa-airgap
     │   │   ├── evaluator.py
     │   │   ├── loader.py
     │   │   └── registry.py
-    │   ├── main.py
-    │   └── templates
-    │       └── index.html
+    │   ├── templates
+    │   │   └── index.html
+    │   └── main.py
     ├── Dockerfile
     ├── python-3.12-slim.tar
     ├── requirements.txt
     └── wheels
         ├── annotated_doc-0.0.4-py3-none-any.whl
         ├── annotated_types-0.7.0-py3-none-any.whl
-        ├── anyio-4.12.0-py3-none-any.whl
-        ├── click-8.3.1-py3-none-any.whl
-        ├── fastapi-0.126.0-py3-none-any.whl
+        ├── anyio-4.13.0-py3-none-any.whl
+        ├── click-8.3.2-py3-none-any.whl
+        ├── fastapi-0.136.0-py3-none-any.whl
         ├── h11-0.16.0-py3-none-any.whl
-        ├── idna-3.11-py3-none-any.whl
+        ├── idna-3.12-py3-none-any.whl
         ├── jinja2-3.1.6-py3-none-any.whl
-        ├── lxml-6.0.2-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
+        ├── lxml-6.1.0-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
         ├── markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-        ├── pydantic-2.12.5-py3-none-any.whl
-        ├── pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-        ├── python_multipart-0.0.21-py3-none-any.whl
-        ├── starlette-0.50.0-py3-none-any.whl
+        ├── pydantic-2.13.3-py3-none-any.whl
+        ├── pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        ├── python_multipart-0.0.26-py3-none-any.whl
+        ├── starlette-1.0.0-py3-none-any.whl
         ├── typing_extensions-4.15.0-py3-none-any.whl
         ├── typing_inspection-0.4.2-py3-none-any.whl
-        └── uvicorn-0.38.0-py3-none-any.whl
+        └── uvicorn-0.45.0-py3-none-any.whl
 ```
 🧱 Air-Gapped Build Overview
 
@@ -89,7 +88,7 @@ No internet access required
 
 Step 1 - Download tar.gz package from the release page here: 
 ```text
-https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/V1.1/caage.tar.gz
+https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage.tar.gz
 ```
 
 To download directly onto a linux host use the following
