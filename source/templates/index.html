@@ -200,6 +200,22 @@
       border: 1px solid var(--line);
     }
 
+    .summary-box[data-status] {
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .summary-box[data-status]:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(17, 24, 39, 0.12);
+      border-color: #d0d8e2;
+    }
+
+    .summary-box.active {
+      border-color: var(--accent);
+      box-shadow: 0 12px 28px rgba(255, 106, 0, 0.2);
+    }
+
     .chart-card {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -463,6 +479,12 @@
       color: inherit;
       border-left: 6px solid #adb5bd;
     }
+
+    .control-header.error {
+      background: transparent;
+      color: inherit;
+      border-left: 6px solid #b00020;
+    }
     .badges span {
       margin-left: 6px;
       padding: 4px 8px;
@@ -568,6 +590,15 @@
 
     .na {
       background: #adb5bd;
+      color: white;
+    }
+
+    .badges span.error {
+      background: #b00020;
+      color: white;
+    }
+    .error {
+      background: #b00020;
       color: white;
     }
 
@@ -717,10 +748,16 @@
         if (control.dataset.status === "na") {
           return;
         }
+        if (control.dataset.status === "error") {
+          return;
+        }
         const frameworks = (control.dataset.frameworks || "")
           .split(",")
           .map((s) => s.trim());
         if (activeFilter !== "all" && !frameworks.includes(activeFilter)) {
+          return;
+        }
+        if (activeStatus !== "all" && control.dataset.status !== activeStatus) {
           return;
         }
         total += 1;
@@ -756,13 +793,17 @@
       }
     }
 
+    let activeStatus = "all";
+
     function applyFilter(filter) {
       const controls = document.querySelectorAll(".control");
       controls.forEach((control) => {
         const frameworks = (control.dataset.frameworks || "")
           .split(",")
           .map((s) => s.trim());
-        const show = filter === "all" || frameworks.includes(filter);
+        const status = control.dataset.status;
+        const statusMatch = activeStatus === "all" || status === activeStatus;
+        const show = (filter === "all" || frameworks.includes(filter)) && statusMatch;
         control.style.display = show ? "" : "none";
       });
 
@@ -848,6 +889,20 @@
         });
       });
 
+      document.querySelectorAll(".summary-box[data-status]").forEach((box) => {
+        box.addEventListener("click", () => {
+          const status = box.dataset.status;
+          activeStatus = activeStatus === status ? "all" : status;
+          document.querySelectorAll(".summary-box[data-status]").forEach((el) => {
+            el.classList.toggle("active", el.dataset.status === activeStatus);
+          });
+          applyFilter(getActiveFilter());
+        });
+      });
+      document.querySelectorAll(".summary-box[data-status]").forEach((el) => {
+        el.classList.toggle("active", el.dataset.status === activeStatus);
+      });
+
       recalcSummary(getActiveFilter());
     });
   </script>
@@ -860,7 +915,7 @@
     <div class="hero-logo">
       <img src="{{ url_for('assets', path='CAAGE.png') }}" alt="CAAGE logo">
     </div>
-    <div class="hero-version">v1.0</div>
+    <div class="hero-version">v1.2</div>
     <div class="hero-top">
       <div class="brand-title">
         <span class="tagline-strong">Air-gapped CIS + STIG + PANW best practice review for PAN-OS configs (NGFW only; Panorama not supported)</span>
@@ -871,6 +926,11 @@
       <input type="file" name="file" required>
       <button type="submit">Run Assessment</button>
     </form>
+    {% if upload_error %}
+    <div class="notice" role="alert">
+      <strong>Upload error:</strong> {{ upload_error }}
+    </div>
+    {% endif %}
     <div class="notice">
       <strong>Notice:</strong> This is not an official Palo Alto Networks Best Practice Assessment tool.
       The supported and authoritative solution is available in Strata Cloud Manager
@@ -886,24 +946,24 @@
 {% if controls %}
 
 <div class="summary">
-  <div class="summary-box">
+  <div class="summary-box" data-status="all">
     <h3>Total</h3>
-    <p id="summary-total">{{ controls | rejectattr("status","equalto","manual") | rejectattr("status","equalto","na") | list | length }}</p>
+    <p id="summary-total">{{ controls | rejectattr("status","equalto","manual") | rejectattr("status","equalto","na") | rejectattr("status","equalto","error") | list | length }}</p>
   </div>
-  <div class="summary-box">
+  <div class="summary-box" data-status="fail">
     <h3>Failed</h3>
     <p id="summary-fail">{{ controls | selectattr("status","equalto","fail") | list | length }}</p>
   </div>
-  <div class="summary-box">
+  <div class="summary-box" data-status="pass">
     <h3>Passed</h3>
     <p id="summary-pass">{{ controls | selectattr("status","equalto","pass") | list | length }}</p>
   </div>
-  <div class="summary-box">
+  <div class="summary-box" data-status="warn">
     <h3>Warnings</h3>
     <p id="summary-warn">{{ controls | selectattr("status","equalto","warn") | list | length }}</p>
   </div>
 
-  {% set total_count = controls | rejectattr("status","equalto","manual") | rejectattr("status","equalto","na") | list | length %}
+  {% set total_count = controls | rejectattr("status","equalto","manual") | rejectattr("status","equalto","na") | rejectattr("status","equalto","error") | list | length %}
   {% set pass_count = controls | selectattr("status","equalto","pass") | list | length %}
   {% set fail_count = controls | selectattr("status","equalto","fail") | list | length %}
   {% set warn_count = controls | selectattr("status","equalto","warn") | list | length %}
@@ -950,6 +1010,7 @@
 
 <div class="filter-bar" role="tablist" aria-label="Framework filters">
   <button type="button" class="active" data-filter="all">All</button>
+  <button type="button" data-filter="PANW">PANW Policy BP</button>
   <button type="button" data-filter="CIS">CIS</button>
   <button type="button" data-filter="STIG">STIG</button>
   <label class="cloud-toggle">
@@ -979,12 +1040,17 @@
      data-recommendation="{{ c.recommendation }}"
      data-cis-level="{{ c.cis_level }}"
      data-stig-ids="{{ c.stig_ids | join(',') }}"
+     data-cis-ids="{{ c.cis_ids | join(',') }}"
      data-status="{{ c.status }}">
   <div class="control-header {{ c.status }}" onclick="toggle('{{ cid }}')" aria-expanded="false">
     <strong>{{ c.display_id }} — {{ c.title }}</strong>
     <div class="badges">
-      {% if "CIS" in c.frameworks and c.cis_level %}
-      <span class="cis">CIS {{ c.cis_level }}</span>
+      {% if "CIS" in c.frameworks %}
+        {% if c.cis_ids %}
+        <span class="cis">CIS {{ c.cis_ids | join(', ') }}</span>
+        {% elif c.cis_level %}
+        <span class="cis">CIS {{ c.cis_level }}</span>
+        {% endif %}
       {% endif %}
       {% if "STIG" in c.frameworks %}
       <span class="stig">
@@ -994,7 +1060,7 @@
       <span class="section-badge">{{ c.section }}</span>
       <span class="{{ c.status }}">{{ "N/A" if c.status == "na" else c.status|upper }}</span>
       <span class="expand-hint">Details <span class="chevron">▸</span></span>
-      {% if c.status != "manual" and c.status != "na" %}
+      {% if c.status != "manual" and c.status != "na" and c.status != "error" %}
       <label class="exclude-toggle" title="Exclude from score" onclick="event.stopPropagation()">
         <input type="checkbox" class="exclude-input" onclick="event.stopPropagation()">
         Exclude
