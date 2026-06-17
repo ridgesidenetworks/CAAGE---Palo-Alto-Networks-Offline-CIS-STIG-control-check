@@ -3,12 +3,14 @@ from engine.checks import (
     check_app_any,
     check_service_any,
     check_zone_any,
+    check_address_any,
     check_log_end,
 
     # Security profile checks
     check_missing_av_profile,
     check_missing_as_profile,
     check_missing_vp_profile,
+    check_default_profiles_in_use,
 
     # CIS device management checks
     check_mgmt_http_telnet_disabled,
@@ -114,6 +116,16 @@ from engine.checks import (
     check_app_specific_untrusted_to_trusted,
     check_malicious_ip_deny_rules,
     check_default_policy_logging,
+
+    # CIS Group A additions
+    check_mgmt_profile_permitted_ip,
+    check_userid_deny_to_untrusted,
+    check_data_filtering_profile_exists,
+    check_data_filtering_on_internet_rules,
+    check_url_credential_enforcement,
+    check_av_inline_ml_action_reset_both,
+    check_av_inline_ml_enabled,
+    check_dns_security_categories,
 )
 
 CONTROL_REGISTRY = [
@@ -157,6 +169,22 @@ CONTROL_REGISTRY = [
         "scope": "rules",
     },
     {
+        "id": "PANW-BP-POL-ADDR-ANY",
+        "display_id": "PANW BP • Policy",
+        "title": "Any Source or Destination Address Used in Allow Rule",
+        "category": "Security Policy",
+        "severity": "Medium",
+        "framework": "PANW",
+        "section": "Best Practice - Security Policy",
+        "cis_level": 1,
+        "recommendation": (
+            "Restrict source and destination to specific address objects or "
+            "groups instead of 'any' where the traffic can be scoped."
+        ),
+        "check": check_address_any,
+        "scope": "rules",
+    },
+    {
         "id": "PANW-BP-POL-LOG-END",
         "display_id": "PANW BP • Policy",
         "title": "Log at Session End Not Enabled",
@@ -181,6 +209,8 @@ CONTROL_REGISTRY = [
         "recommendation": "Apply an Anti-Virus security profile to all allow rules.",
         "check": check_missing_av_profile,
         "scope": "rules",
+        "frameworks": ["PANW", "CIS"],
+        "cis_ids": ["6.2"],
     },
     {
         "id": "PANW-BP-POL-NO-AS",
@@ -207,6 +237,24 @@ CONTROL_REGISTRY = [
         "recommendation": "Apply a Vulnerability Protection profile to all allow rules.",
         "check": check_missing_vp_profile,
         "scope": "rules",
+        "frameworks": ["PANW", "CIS"],
+        "cis_ids": ["6.7"],
+    },
+    {
+        "id": "PANW-BP-PROFILE-DEFAULT",
+        "display_id": "PANW BP • Security Profiles",
+        "title": "Default Profiles Used in Allow Rules",
+        "category": "Security Profiles",
+        "severity": "Medium",
+        "framework": "PANW",
+        "section": "Best Practice - Security Profiles",
+        "cis_level": 1,
+        "recommendation": (
+            "Avoid default security profiles; use customized AV/AS/VP/URL profiles "
+            "that meet organizational requirements."
+        ),
+        "check": check_default_profiles_in_use,
+        "scope": "rules",
     },
     {
         "id": "PANW-BP-MGMT-PERMITTED-IP",
@@ -220,6 +268,7 @@ CONTROL_REGISTRY = [
         "cis_level": 1,
         "recommendation": "Restrict management access to permitted IP addresses.",
         "check": check_mgmt_interface_permitted_ips,
+        "cis_ids": ["1.2.1"],
     },
     {
         "id": "PANW-BP-MGMT-DP-PROFILES",
@@ -1148,7 +1197,7 @@ CONTROL_REGISTRY = [
         "recommendation": (
             "Set URL Filtering categories to block or override: adult, hacking, "
             "command-and-control, copyright-infringement, extremism, malware, "
-            "phishing, proxy-avoidance-and-anonymizers, and parked."
+            "ransomware, phishing, proxy-avoidance-and-anonymizers, and parked."
         ),
         "check": check_url_filtering_block_override_categories,
     },
@@ -1178,8 +1227,8 @@ CONTROL_REGISTRY = [
         "cis_level": 1,
         "recommendation": (
             "This check will return a warning even when applied because administrator "
-            "should validate its applied to the needed untrusted intefaces and values "
-            "should be custimized to the organization. Verify Alert is appropriate for org. "
+            "should validate its applied to the needed untrusted interfaces and values "
+            "should be customized to the organization. Verify Alert is appropriate for org. "
             "Verify Activate is 50% of maximum for firewall model. Verify Maximum is "
             "appropriate for org."
         ),
@@ -1196,8 +1245,8 @@ CONTROL_REGISTRY = [
         "cis_level": 1,
         "recommendation": (
             "This check will return a warning even when applied because administrator "
-            "should validate its applied to the needed untrusted intefaces and values "
-            "should be custimized to the organization."
+            "should validate its applied to the needed untrusted interfaces and values "
+            "should be customized to the organization."
         ),
         "check": check_zone_protection_flood_enabled,
     },
@@ -1224,8 +1273,8 @@ CONTROL_REGISTRY = [
         "cis_level": 1,
         "recommendation": (
             "This check will return a warning even when applied because administrator "
-            "should validate its applied to the needed untrusted intefaces and values "
-            "should be custimized to the organization."
+            "should validate its applied to the needed untrusted interfaces and values "
+            "should be customized to the organization."
         ),
         "check": check_zone_protection_drop_special,
     },
@@ -1268,15 +1317,16 @@ CONTROL_REGISTRY = [
     {
         "id": "CIS-PA-7.1",
         "display_id": "CIS 7.1",
-        "title": "Application-Specific Policies for Untrusted to Trusted Traffic",
+        "title": "Application Any Used in Allow Rules (Review Untrusted to Trusted)",
         "category": "Security Policy",
         "severity": "High",
         "framework": "CIS",
         "section": "CIS 7 Security Policies",
         "cis_level": 1,
         "recommendation": (
-            "Use application-specific allow rules and verify untrusted-to-trusted "
-            "policy intent aligns with your security requirements."
+            "Review any allow rules using application=any and confirm whether they "
+            "apply to untrusted-to-trusted traffic; replace with application-specific "
+            "rules where appropriate."
         ),
         "check": check_app_any,
         "scope": "rules",
@@ -1358,5 +1408,163 @@ CONTROL_REGISTRY = [
         "recommendation": "Ensure the decryption certificate is valid and trusted.",
         "manual": True,
         "check": check_manual,
+    },
+    {
+        "id": "CIS-PA-1.2.2",
+        "display_id": "CIS 1.2.2",
+        "title": "Permitted IP Addresses Set for SSH/HTTPS/SNMP Management Profiles",
+        "category": "Management Profiles",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 1.2 Management Interface",
+        "cis_level": 1,
+        "recommendation": (
+            "For every interface management profile that enables SSH, HTTPS, or "
+            "SNMP, restrict Permitted IP Addresses to those needed for management."
+        ),
+        "check": check_mgmt_profile_permitted_ip,
+    },
+    {
+        "id": "CIS-PA-1.6.3",
+        "display_id": "CIS 1.6.3",
+        "title": "Certificate Securing Remote Access VPNs is Valid",
+        "category": "Device Services",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 1.6 Device Services",
+        "cis_level": 2,
+        "recommendation": (
+            "Verify the certificate securing remote access (GlobalProtect) VPNs "
+            "is from a trusted CA, unexpired, >=2048-bit, SHA-2 signed, with "
+            "TLS 1.1+ (1.2 recommended). Certificate trust cannot be validated "
+            "from an offline config and must be reviewed manually."
+        ),
+        "manual": True,
+        "check": check_manual,
+    },
+    {
+        "id": "CIS-PA-2.8",
+        "display_id": "CIS 2.8",
+        "title": "Security Policies Restrict User-ID Agent Traffic to Untrusted Zones",
+        "category": "User Identification",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 2 User Identification",
+        "cis_level": 1,
+        "recommendation": (
+            "Create a security policy denying User-ID (msrpc) traffic from the "
+            "firewall to untrusted zones as a fail-safe against information "
+            "disclosure."
+        ),
+        "check": check_userid_deny_to_untrusted,
+        "scope": "rules",
+    },
+    {
+        "id": "CIS-PA-6.8",
+        "display_id": "CIS 6.8",
+        "title": "PAN-DB URL Filtering is Used",
+        "category": "URL Filtering",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Activate and use the PAN-DB URL Filtering license. License state "
+            "is not present in a configuration export and must be verified "
+            "manually under Device > Licenses."
+        ),
+        "manual": True,
+        "check": check_manual,
+    },
+    {
+        "id": "CIS-PA-6.13",
+        "display_id": "CIS 6.13",
+        "title": "Data Filtering Alerting for Credit Card / SSN Thresholds",
+        "category": "Threat Prevention",
+        "severity": "Low",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Create a Data Filtering profile using credit-card / Social-Security "
+            "data patterns with an alert threshold appropriate to the org."
+        ),
+        "check": check_data_filtering_profile_exists,
+    },
+    {
+        "id": "CIS-PA-6.14",
+        "display_id": "CIS 6.14",
+        "title": "Secure Data Filtering Profile Applied to Internet Allow Rules",
+        "category": "Threat Prevention",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Apply a Data Filtering profile (directly or via a profile group) to "
+            "all allow rules carrying traffic to or from the Internet."
+        ),
+        "check": check_data_filtering_on_internet_rules,
+        "scope": "rules",
+    },
+    {
+        "id": "CIS-PA-6.19",
+        "display_id": "CIS 6.19",
+        "title": "User Credential Submission Detection and Action Configured",
+        "category": "URL Filtering",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "On URL Filtering profiles in use, enable User Credential Detection "
+            "(not Disabled) and set the credential submission action to block or "
+            "continue on enabled categories."
+        ),
+        "check": check_url_credential_enforcement,
+    },
+    {
+        "id": "CIS-PA-6.20",
+        "display_id": "CIS 6.20",
+        "title": "WildFire Inline ML Action Reset-Both on Decoders",
+        "category": "Threat Prevention",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Set 'WildFire Inline ML Action' to reset-both on all antivirus "
+            "decoders except imap and pop3."
+        ),
+        "check": check_av_inline_ml_action_reset_both,
+    },
+    {
+        "id": "CIS-PA-6.21",
+        "display_id": "CIS 6.21",
+        "title": "WildFire Inline ML Enabled for All File Types",
+        "category": "Threat Prevention",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "Enable 'WildFire Inline ML' for all file types on antivirus profiles."
+        ),
+        "check": check_av_inline_ml_enabled,
+    },
+    {
+        "id": "CIS-PA-6.25",
+        "display_id": "CIS 6.25",
+        "title": "DNS Policies Configured on Anti-Spyware Profiles",
+        "category": "Threat Prevention",
+        "severity": "Medium",
+        "framework": "CIS",
+        "section": "CIS 6 Threat Prevention",
+        "cis_level": 1,
+        "recommendation": (
+            "If DNS Security is licensed, set all DNS Security categories to "
+            "sinkhole and enable extended-capture on Command-and-Control domains."
+        ),
+        "check": check_dns_security_categories,
     },
 ]

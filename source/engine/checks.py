@@ -140,8 +140,35 @@ def check_zone_any(xml_root, rules):
             rule_info["reason"] = "Source or destination zone is set to any."
             failures.append(rule_info)
 
-    # 🔑 THIS IS THE FIX:
-    # No failures == PASS, not None
+    # An empty list means PASS (no violations), so always return the list.
+    return failures
+
+
+def check_address_any(xml_root, rules):
+    failures = []
+
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+
+        src = [a.text for a in rule.findall("./source/member")]
+        dst = [a.text for a in rule.findall("./destination/member")]
+
+        any_src = "any" in src
+        any_dst = "any" in dst
+        if any_src or any_dst:
+            which = []
+            if any_src:
+                which.append("source")
+            if any_dst:
+                which.append("destination")
+            rule_info = _rule_base(rule)
+            rule_info["reason"] = (
+                f"{' and '.join(which).capitalize()} address is set to any "
+                "on an allow rule."
+            )
+            failures.append(rule_info)
+
     return failures
 
 
@@ -711,6 +738,32 @@ def _rule_profile_name(rule, groups, profile_type):
     return None
 
 
+def check_default_profiles_in_use(xml_root, rules):
+    failures = []
+    groups = _profile_groups(xml_root)
+    profile_types = {
+        "virus": "Antivirus",
+        "spyware": "Anti-Spyware",
+        "vulnerability": "Vulnerability",
+        "url-filtering": "URL Filtering",
+    }
+
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        rule_info = _rule_base(rule)
+        triggered = []
+        for profile_key, label in profile_types.items():
+            profile = _rule_profile_name(rule, groups, profile_key)
+            if profile == "default":
+                triggered.append(label)
+        if triggered:
+            rule_info["reason"] = f"Default profiles in use: {', '.join(triggered)}."
+            failures.append(rule_info)
+
+    return failures
+
+
 def _action_value(action_elem):
     if action_elem is None:
         return ""
@@ -866,12 +919,16 @@ def check_ikev2_post_quantum_enabled(xml_root, rules):
     gateways = xml_root.xpath(
         "/config/devices/entry/network/ike/gateway/entry"
     )
+    found_ike = False
+    found_ikev2 = False
 
     for gw in gateways:
         name = gw.get("name", "unknown")
+        found_ike = True
         ikev2 = gw.find("./protocol/ikev2")
         if ikev2 is None:
             continue
+        found_ikev2 = True
 
         pq_ppk = ikev2.findtext("./pq-ppk/enabled")
         if pq_ppk is None:
@@ -888,6 +945,21 @@ def check_ikev2_post_quantum_enabled(xml_root, rules):
                 "enabled",
                 "disabled",
             ))
+
+    if not found_ikev2:
+        if not found_ike:
+            return [_setting_finding(
+                "ike gateways",
+                "configured",
+                "not found",
+                severity="na",
+                reason="No IKE gateways configured; check is not applicable.",
+            )]
+        return [_setting_finding(
+            "ikev2 gateways",
+            "configured with PQ",
+            "not found",
+        )]
 
     return failures
 
@@ -1209,6 +1281,25 @@ def check_audit_storage_alarms_75(xml_root, rules):
 
 def check_packet_buffer_protection_enabled(xml_root, rules):
     failures = []
+
+    # Global packet buffer protection. PAN-OS stores this under the session
+    # settings; when present it must not be explicitly disabled.
+    global_value = _first_xpath_text(
+        xml_root,
+        [
+            "/config/devices/entry/deviceconfig/setting/session/"
+            "packet-buffer-protection",
+            "/config/devices/entry/deviceconfig/setting/session/"
+            "packet-buffer-protection/enable",
+        ],
+    )
+    if global_value == "no":
+        failures.append(_setting_finding(
+            "deviceconfig/setting/session/packet-buffer-protection",
+            "enabled",
+            global_value,
+        ))
+
     zones = xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry")
     for zone in zones:
         name = zone.get("name", "unknown")
@@ -1297,7 +1388,7 @@ def check_zone_protection_syn_cookies(xml_root, rules):
                 reason=(
                     "This check will return a warning even when applied because "
                     "administrator should validate its applied to the needed "
-                    "untrusted intefaces and values should be custimized to the "
+                    "untrusted interfaces and values should be customized to the "
                     "organization. Verify Alert is appropriate for org. Verify "
                     "Activate is 50% of maximum for firewall model. Verify "
                     "Maximum is appropriate for org."
@@ -1322,7 +1413,7 @@ def check_zone_protection_syn_cookies(xml_root, rules):
             reason=(
                 "This check will return a warning even when applied because "
                 "administrator should validate its applied to the needed "
-                "untrusted intefaces and values should be custimized to the "
+                "untrusted interfaces and values should be customized to the "
                 "organization. Verify Alert is appropriate for org. Verify "
                 "Activate is 50% of maximum for firewall model. Verify "
                 "Maximum is appropriate for org."
@@ -1357,8 +1448,8 @@ def check_zone_protection_flood_enabled(xml_root, rules):
                 severity="warn",
                 reason=(
                     "This check will return a warning even when applied because administrator "
-                    "should validate its applied to the needed untrusted intefaces and values "
-                    "should be custimized to the organization."
+                    "should validate its applied to the needed untrusted interfaces and values "
+                    "should be customized to the organization."
                 ),
             ))
             continue
@@ -1375,8 +1466,8 @@ def check_zone_protection_flood_enabled(xml_root, rules):
                     severity="warn",
                     reason=(
                         "This check will return a warning even when applied because administrator "
-                        "should validate its applied to the needed untrusted intefaces and values "
-                        "should be custimized to the organization."
+                        "should validate its applied to the needed untrusted interfaces and values "
+                        "should be customized to the organization."
                     ),
                 ))
 
@@ -1389,8 +1480,8 @@ def check_zone_protection_flood_enabled(xml_root, rules):
                 severity="warn",
                 reason=(
                     "This check will return a warning even when applied because administrator "
-                    "should validate its applied to the needed untrusted intefaces and values "
-                    "should be custimized to the organization."
+                    "should validate its applied to the needed untrusted interfaces and values "
+                    "should be customized to the organization."
                 ),
             ))
 
@@ -1407,6 +1498,16 @@ def check_zone_protection_flood_enabled(xml_root, rules):
 def check_zone_protection_recon_enabled(xml_root, rules):
     profile_map = _zone_protection_profile_map(xml_root)
     failures = []
+
+    zones = xml_root.xpath("/config/devices/entry/vsys/entry/zone/entry")
+    if not zones:
+        return [_setting_finding(
+            "zone protection profiles",
+            "configured",
+            "not found",
+            severity="na",
+            reason="No zones are configured.",
+        )]
 
     for zone in _untrusted_zones(xml_root):
         zone_name = zone.get("name", "unknown")
@@ -1447,8 +1548,8 @@ def check_zone_protection_drop_special(xml_root, rules):
                 severity="warn",
                 reason=(
                     "This check will return a warning even when applied because administrator "
-                    "should validate its applied to the needed untrusted intefaces and values "
-                    "should be custimized to the organization."
+                    "should validate its applied to the needed untrusted interfaces and values "
+                    "should be customized to the organization."
                 ),
             ))
             continue
@@ -1469,8 +1570,8 @@ def check_zone_protection_drop_special(xml_root, rules):
                     severity="warn",
                     reason=(
                         "This check will return a warning even when applied because administrator "
-                        "should validate its applied to the needed untrusted intefaces and values "
-                        "should be custimized to the organization."
+                        "should validate its applied to the needed untrusted interfaces and values "
+                        "should be customized to the organization."
                     ),
                 ))
 
@@ -1483,8 +1584,8 @@ def check_zone_protection_drop_special(xml_root, rules):
                 severity="warn",
                 reason=(
                     "This check will return a warning even when applied because administrator "
-                    "should validate its applied to the needed untrusted intefaces and values "
-                    "should be custimized to the organization."
+                    "should validate its applied to the needed untrusted interfaces and values "
+                    "should be customized to the organization."
                 ),
             ))
 
@@ -1676,7 +1777,13 @@ def check_user_id_only_on_trusted(xml_root, rules):
 def check_user_id_include_exclude_configured(xml_root, rules):
     enabled_zones = _user_id_enabled_zones(xml_root)
     if not enabled_zones:
-        return []
+        return [_setting_finding(
+            "user-id include/exclude networks",
+            "configured",
+            "not applicable",
+            severity="na",
+            reason="User-ID is not enabled on any zones.",
+        )]
 
     include_exclude_paths = [
         "/config/devices/entry/deviceconfig/system/user-id/include-exclude",
@@ -1993,6 +2100,20 @@ def check_wildfire_analysis_on_rules(xml_root, rules):
 
 
 def check_wildfire_forward_decrypted_content(xml_root, rules):
+    # Only applicable when SSL decryption is actually configured.
+    has_decryption = _xpath_exists(
+        xml_root,
+        "/config/devices/entry/vsys/entry/rulebase/decryption/rules/entry",
+    ) or _xpath_exists(xml_root, "//ssl-decrypt")
+    if not has_decryption:
+        return [_setting_finding(
+            "allow-forward-decrypted-content",
+            "yes",
+            "not applicable",
+            severity="na",
+            reason="No SSL decryption is configured; check is not applicable.",
+        )]
+
     values = xml_root.xpath("//ssl-decrypt/allow-forward-decrypted-content/text()")
     if not values:
         return [_setting_finding(
@@ -2159,6 +2280,12 @@ def check_wildfire_inline_cloud_analysis(xml_root, rules):
 def check_av_reset_both_decoders(xml_root, rules):
     failures = []
     profiles = _profile_entries(xml_root, "virus")
+    if not profiles:
+        return [_setting_finding(
+            "antivirus profiles",
+            "configured",
+            "not found",
+        )]
 
     for profile in profiles:
         name = profile.get("name", "unknown")
@@ -2191,6 +2318,15 @@ def check_spyware_blocks_all_severities(xml_root, rules):
         name = _rule_profile_name(rule, groups, "spyware")
         if name:
             used_profiles.add(name)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "anti-spyware profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with anti-spyware profiles are configured.",
+        )]
 
     for name in sorted(used_profiles):
         profile = profiles.get(name)
@@ -2235,6 +2371,15 @@ def check_spyware_dns_sinkhole(xml_root, rules):
         if name:
             used_profiles.add(name)
 
+    if not used_profiles:
+        return [_setting_finding(
+            "anti-spyware profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with anti-spyware profiles are configured.",
+        )]
+
     for name in sorted(used_profiles):
         profile = profiles.get(name)
         if profile is None:
@@ -2275,6 +2420,15 @@ def check_vp_blocks_critical_high(xml_root, rules):
         if name:
             used_profiles.add(name)
 
+    if not used_profiles:
+        return [_setting_finding(
+            "vulnerability profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with vulnerability profiles are configured.",
+        )]
+
     for name in sorted(used_profiles):
         profile = profiles.get(name)
         if profile is None:
@@ -2308,6 +2462,15 @@ def check_vp_blocks_critical_high(xml_root, rules):
 def check_url_filtering_on_rules(xml_root, rules):
     groups = _profile_groups(xml_root)
     failures = []
+    has_allow = any(rule.findtext("./action") == "allow" for rule in rules)
+    if not has_allow:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules are configured.",
+        )]
 
     for rule in rules:
         if rule.findtext("./action") != "allow":
@@ -2352,6 +2515,8 @@ def check_url_filtering_block_override_categories(xml_root, rules):
             "url-filtering profiles",
             "in use",
             "",
+            severity="na",
+            reason="No allow rules with URL filtering profiles are configured.",
         )]
 
     failures = []
@@ -2423,6 +2588,14 @@ def check_url_filtering_no_allow_categories(xml_root, rules):
 def check_url_http_header_logging(xml_root, rules):
     profiles = _profile_entries(xml_root, "url-filtering")
     failures = []
+    if not profiles:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "configured",
+            "not found",
+            severity="na",
+            reason="No URL filtering profiles are configured.",
+        )]
 
     for profile in profiles:
         name = profile.get("name", "unknown")
@@ -2452,6 +2625,15 @@ def check_vp_inline_cloud_analysis(xml_root, rules):
         name = _rule_profile_name(rule, groups, "vulnerability")
         if name:
             used_profiles.add(name)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "vulnerability profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with vulnerability profiles are configured.",
+        )]
 
     for name in sorted(used_profiles):
         profile = profiles.get(name)
@@ -2486,6 +2668,15 @@ def check_url_cloud_inline_categorization(xml_root, rules):
         if name:
             used_profiles.add(name)
 
+    if not used_profiles:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with URL filtering profiles are configured.",
+        )]
+
     for name in sorted(used_profiles):
         profile = profiles.get(name)
         if profile is None:
@@ -2518,6 +2709,15 @@ def check_spyware_inline_cloud_analysis(xml_root, rules):
         name = _rule_profile_name(rule, groups, "spyware")
         if name:
             used_profiles.add(name)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "anti-spyware profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with anti-spyware profiles are configured.",
+        )]
 
     for name in sorted(used_profiles):
         profile = profiles.get(name)
@@ -2836,3 +3036,253 @@ def check_verify_update_server_identity(xml_root, rules):
         )]
 
     return []
+
+
+# -------------------------------------------------------------------
+# CIS GROUP A ADDITIONS
+# -------------------------------------------------------------------
+
+def check_mgmt_profile_permitted_ip(xml_root, rules):
+    """CIS 1.2.2 - Permitted IP set on mgmt profiles enabling SSH/HTTPS/SNMP."""
+    failures = []
+    profiles = xml_root.xpath(
+        "/config/devices/entry/network/profiles/"
+        "interface-management-profile/entry"
+    )
+    for profile in profiles:
+        name = profile.get("name", "unknown")
+        enabled = [s for s in ("ssh", "https", "snmp")
+                   if profile.findtext(f"./{s}") == "yes"]
+        if not enabled:
+            continue
+        has_ip = bool(profile.xpath("./permitted-ip/entry")) or bool(
+            profile.xpath("./permitted-ip/ip-netmask"))
+        if not has_ip:
+            failures.append(_setting_finding(
+                f"interface-management-profile {name} permitted-ip",
+                "restricted to management IPs",
+                f"{', '.join(enabled)} enabled, permitted-ip not set",
+            ))
+    return failures
+
+
+def check_userid_deny_to_untrusted(xml_root, rules):
+    """CIS 2.8 - A security policy denies User-ID/msrpc to untrusted zones."""
+    for rule in rules:
+        action = rule.findtext("./action")
+        if action not in {"deny", "drop", "reset-client",
+                          "reset-server", "reset-both"}:
+            continue
+        apps = [a.text for a in rule.findall("./application/member")]
+        if "msrpc" not in apps:
+            continue
+        to_zones = [z.text for z in rule.findall("./to/member")]
+        if any(z == "any" or _is_untrusted_zone(z) for z in to_zones):
+            return []
+
+    return [_setting_finding(
+        "security policy: deny msrpc to untrusted",
+        "present",
+        "not found",
+        reason=(
+            "No security rule denies User-ID (msrpc) traffic from the firewall "
+            "to untrusted zones. Create a deny rule for application 'msrpc' "
+            "destined to untrusted zones as a fail-safe against User-ID/WMI "
+            "information disclosure."
+        ),
+    )]
+
+
+def check_data_filtering_profile_exists(xml_root, rules):
+    """CIS 6.13 - A Data Filtering profile (CC/SSN patterns) exists."""
+    if _profile_entries(xml_root, "data-filtering"):
+        return []
+    return [_setting_finding(
+        "data-filtering profile",
+        "configured",
+        "not found",
+        reason=(
+            "No Data Filtering profile is configured. Create one using "
+            "credit-card / Social-Security-number data patterns with an alert "
+            "threshold appropriate to your organization."
+        ),
+    )]
+
+
+def check_data_filtering_on_internet_rules(xml_root, rules):
+    """CIS 6.14 - Data Filtering profile applied to Internet-facing allow rules."""
+    groups = _profile_groups(xml_root)
+    failures = []
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        from_zones = [z.text for z in rule.findall("./from/member")]
+        to_zones = [z.text for z in rule.findall("./to/member")]
+        internet = (any(_is_untrusted_zone(z) for z in from_zones)
+                    or any(_is_untrusted_zone(z) for z in to_zones))
+        if not internet:
+            continue
+        if not _rule_profile_name(rule, groups, "data-filtering"):
+            rule_info = _rule_base(rule)
+            rule_info["reason"] = (
+                "No Data Filtering profile on this Internet-facing allow rule."
+            )
+            failures.append(rule_info)
+    return failures
+
+
+def check_url_credential_enforcement(xml_root, rules):
+    """CIS 6.19 - User Credential Submission detection/action on URL profiles."""
+    groups = _profile_groups(xml_root)
+    profile_map = _profile_entry_map(xml_root, "url-filtering")
+    used_profiles = set()
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        name = _rule_profile_name(rule, groups, "url-filtering")
+        if name:
+            used_profiles.add(name)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "url-filtering profiles",
+            "in use",
+            "not found",
+            severity="na",
+            reason="No allow rules with URL filtering profiles are configured.",
+        )]
+
+    failures = []
+    for name in sorted(used_profiles):
+        profile = profile_map.get(name)
+        if profile is None:
+            failures.append(_setting_finding(
+                f"url-filtering profile {name}", "present", "missing"))
+            continue
+
+        ce = profile.find("./credential-enforcement")
+        mode = ce.find("./mode") if ce is not None else None
+        # "Disabled" detection means no real mode (ip-user / group-mapping /
+        # domain-credential) is selected.
+        disabled = (mode is None) or (mode.find("./disabled") is not None) or (
+            len(mode) == 0)
+        block = ce.xpath("./block/member") if ce is not None else []
+        cont = ce.xpath("./continue/member") if ce is not None else []
+        if disabled or not (block or cont):
+            failures.append(_setting_finding(
+                f"url-filtering profile {name} credential-enforcement",
+                "detection enabled; submit action block or continue",
+                "disabled or not set",
+            ))
+    return failures
+
+
+def check_av_inline_ml_action_reset_both(xml_root, rules):
+    """CIS 6.20 - Wildfire Inline ML Action reset-both (except imap/pop3)."""
+    profiles = _profile_entries(xml_root, "virus")
+    if not profiles:
+        return [_setting_finding(
+            "antivirus profiles", "configured", "not found")]
+    failures = []
+    for profile in profiles:
+        name = profile.get("name", "unknown")
+        for decoder in profile.xpath("./decoder/entry"):
+            decoder_name = decoder.get("name", "")
+            if decoder_name in {"imap", "pop3"}:
+                continue
+            action = decoder.findtext("./mlav-action")
+            if action != "reset-both":
+                failures.append(_setting_finding(
+                    f"antivirus profile {name} decoder {decoder_name} mlav-action",
+                    "reset-both",
+                    action,
+                ))
+    return failures
+
+
+def check_av_inline_ml_enabled(xml_root, rules):
+    """CIS 6.21 - Wildfire Inline ML enabled for all file types."""
+    profiles = _profile_entries(xml_root, "virus")
+    if not profiles:
+        return [_setting_finding(
+            "antivirus profiles", "configured", "not found")]
+    failures = []
+    for profile in profiles:
+        name = profile.get("name", "unknown")
+        entries = profile.xpath("./mlav-engine-filebased-enabled/entry")
+        if not entries:
+            failures.append(_setting_finding(
+                f"antivirus profile {name} Wildfire Inline ML",
+                "enabled for all file types",
+                "not configured",
+            ))
+            continue
+        for entry in entries:
+            file_type = entry.get("name", "")
+            action = entry.findtext("./mlav-policy-action")
+            if action != "enable":
+                failures.append(_setting_finding(
+                    f"antivirus profile {name} inline ML '{file_type}'",
+                    "enable",
+                    action,
+                ))
+    return failures
+
+
+def check_dns_security_categories(xml_root, rules):
+    """CIS 6.25 - DNS Security categories sinkholed; C2 extended-capture."""
+    groups = _profile_groups(xml_root)
+    profile_map = _profile_entry_map(xml_root, "spyware")
+    used_profiles = set()
+    for rule in rules:
+        if rule.findtext("./action") != "allow":
+            continue
+        name = _rule_profile_name(rule, groups, "spyware")
+        if name:
+            used_profiles.add(name)
+
+    if not used_profiles:
+        return [_setting_finding(
+            "anti-spyware profiles", "in use", "not found",
+            severity="na",
+            reason="No allow rules with anti-spyware profiles are configured.",
+        )]
+
+    failures = []
+    found_dns_security = False
+    for name in sorted(used_profiles):
+        profile = profile_map.get(name)
+        if profile is None:
+            continue
+        cats = profile.xpath("./botnet-domains/dns-security-categories/entry")
+        if not cats:
+            continue
+        found_dns_security = True
+        for cat in cats:
+            cat_name = cat.get("name", "")
+            action = cat.findtext("./action")
+            if action != "sinkhole":
+                failures.append(_setting_finding(
+                    f"anti-spyware {name} dns-security {cat_name}",
+                    "sinkhole",
+                    action,
+                ))
+            if cat_name == "pan-dns-sec-cc":
+                pcap = cat.findtext("./packet-capture")
+                if pcap != "extended-capture":
+                    failures.append(_setting_finding(
+                        f"anti-spyware {name} dns-security {cat_name} packet-capture",
+                        "extended-capture",
+                        pcap,
+                    ))
+
+    if not found_dns_security:
+        return [_setting_finding(
+            "DNS Security categories", "configured", "not found",
+            severity="na",
+            reason=(
+                "DNS Security categories are not configured (a DNS Security "
+                "license may not be present); check is not applicable."
+            ),
+        )]
+    return failures
