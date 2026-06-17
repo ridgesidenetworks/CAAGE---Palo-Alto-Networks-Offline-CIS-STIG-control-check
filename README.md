@@ -36,13 +36,9 @@ panw-ngfw-bpa-airgap
     │   ├── assets
     │   │   ├── CAAGE.png
     │   │   └── stig-shield.svg
-    │   ├── controls
-    │   │   ├── panw_policy.yaml
-    │   │   └── registry.yaml
     │   ├── engine
     │   │   ├── checks.py
     │   │   ├── evaluator.py
-    │   │   ├── loader.py
     │   │   └── registry.py
     │   ├── templates
     │   │   └── index.html
@@ -53,21 +49,21 @@ panw-ngfw-bpa-airgap
     └── wheels
         ├── annotated_doc-0.0.4-py3-none-any.whl
         ├── annotated_types-0.7.0-py3-none-any.whl
-        ├── anyio-4.13.0-py3-none-any.whl
-        ├── click-8.3.2-py3-none-any.whl
-        ├── fastapi-0.136.0-py3-none-any.whl
+        ├── anyio-4.14.0-py3-none-any.whl
+        ├── click-8.4.1-py3-none-any.whl
+        ├── fastapi-0.137.1-py3-none-any.whl
         ├── h11-0.16.0-py3-none-any.whl
-        ├── idna-3.12-py3-none-any.whl
+        ├── idna-3.18-py3-none-any.whl
         ├── jinja2-3.1.6-py3-none-any.whl
-        ├── lxml-6.1.0-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
+        ├── lxml-6.1.1-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
         ├── markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
         ├── pydantic-2.13.3-py3-none-any.whl
-        ├── pydantic_core-2.46.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-        ├── python_multipart-0.0.26-py3-none-any.whl
-        ├── starlette-1.0.0-py3-none-any.whl
+        ├── pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+        ├── python_multipart-0.0.32-py3-none-any.whl
+        ├── starlette-1.3.1-py3-none-any.whl
         ├── typing_extensions-4.15.0-py3-none-any.whl
         ├── typing_inspection-0.4.2-py3-none-any.whl
-        └── uvicorn-0.45.0-py3-none-any.whl
+        └── uvicorn-0.38.0-py3-none-any.whl
 ```
 🧱 Air-Gapped Build Overview
 
