@@ -1,32 +1,41 @@
+import os
+
 from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from lxml import etree
 
-from engine.evaluator import evaluate_controls
+from engine.evaluator import evaluate_controls, SECURITY_RULE_XPATH
 from engine.checks import _profile_groups, _rule_profile_name
 
-SECURITY_RULE_XPATH = (
-    "/config/devices/entry/vsys/entry"
-    "/rulebase/security/rules/entry"
-)
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
+# Resolve asset/template directories relative to this file so the app works
+# regardless of the process working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI()
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
-templates = Jinja2Templates(directory="templates")
+app.mount(
+    "/assets",
+    StaticFiles(directory=os.path.join(BASE_DIR, "assets")),
+    name="assets",
+)
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
-def summarize(controls):
-    summary = {"pass": 0, "fail": 0, "na": 0}
-    for c in controls:
-        if c["status"] == "pass":
-            summary["pass"] += 1
-        elif c["status"] == "fail":
-            summary["fail"] += 1
-        else:
-            summary["na"] += 1
-    return summary
+def render(request: Request, **context):
+    """Render the index template with safe defaults for every context key."""
+    defaults = {
+        "request": request,
+        "controls": [],
+        "grouped_controls": [],
+        "coverage": None,
+        "upload_error": None,
+    }
+    defaults.update(context)
+    # Starlette >=1.0 signature: request first, then template name, then context.
+    return templates.TemplateResponse(request, "index.html", defaults)
 
 
 def group_controls(controls):
@@ -63,8 +72,33 @@ def group_controls(controls):
     return grouped
 
 
-def compute_policy_coverage(xml_bytes: bytes):
-    xml_root = etree.XML(xml_bytes)
+def validate_and_parse(xml_bytes: bytes):
+    """Validate uploaded bytes and parse them with a hardened XML parser.
+
+    Returns ``(xml_root, None)`` on success or ``(None, error_message)`` when
+    the upload is rejected. Entity resolution and network access are disabled,
+    and DOCTYPE/ENTITY declarations are refused outright to block XXE and
+    entity-expansion ("billion laughs") attacks.
+    """
+    if len(xml_bytes) > MAX_UPLOAD_BYTES:
+        return None, "File is too large for processing."
+
+    if not xml_bytes.lstrip().startswith(b"<") or b"<config" not in xml_bytes:
+        return None, "Uploaded file does not look like a PAN-OS XML config."
+
+    if b"<!DOCTYPE" in xml_bytes.upper() or b"<!ENTITY" in xml_bytes.upper():
+        return None, "XML with DOCTYPE or ENTITY declarations is not allowed."
+
+    parser = etree.XMLParser(resolve_entities=False, no_network=True)
+    try:
+        xml_root = etree.fromstring(xml_bytes, parser=parser)
+    except etree.XMLSyntaxError:
+        return None, "Invalid XML file. Please upload a PAN-OS config."
+
+    return xml_root, None
+
+
+def compute_policy_coverage(xml_root):
     rules = xml_root.xpath(SECURITY_RULE_XPATH)
     allow_rules = [r for r in rules if r.findtext("./action") == "allow"]
     total = len(allow_rules)
@@ -111,106 +145,41 @@ def compute_policy_coverage(xml_bytes: bytes):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    # IMPORTANT: always pass empty defaults
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            "request": request,
-            "controls": [],
-            "grouped_controls": [],
-            "summary": None,
-            "coverage": None,
-        },
-    )
+    return render(request)
 
 
 @app.post("/assess", response_class=HTMLResponse)
 async def assess(request: Request, file: UploadFile = File(...)):
-    xml_bytes = await file.read()
-    max_size = 15 * 1024 * 1024
+    # Reject oversized uploads before buffering the whole body into memory.
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > MAX_UPLOAD_BYTES:
+                return render(request, upload_error="File is too large for processing.")
+        except ValueError:
+            pass
+
     if not file.filename:
-        return templates.TemplateResponse(
+        return render(
             request,
-            "index.html",
-            {
-                "request": request,
-                "controls": [],
-                "grouped_controls": [],
-                "summary": None,
-                "coverage": None,
-                "upload_error": "Please upload a PAN-OS XML configuration file.",
-            },
-        )
-    if len(xml_bytes) > max_size:
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "request": request,
-                "controls": [],
-                "grouped_controls": [],
-                "summary": None,
-                "coverage": None,
-                "upload_error": "File is too large for processing.",
-            },
-        )
-    if not xml_bytes.lstrip().startswith(b"<") or b"<config" not in xml_bytes:
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "request": request,
-                "controls": [],
-                "grouped_controls": [],
-                "summary": None,
-                "coverage": None,
-                "upload_error": "Uploaded file does not look like a PAN-OS XML config.",
-            },
-        )
-    if b"<!DOCTYPE" in xml_bytes.upper() or b"<!ENTITY" in xml_bytes.upper():
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "request": request,
-                "controls": [],
-                "grouped_controls": [],
-                "summary": None,
-                "coverage": None,
-                "upload_error": "XML with DOCTYPE or ENTITY declarations is not allowed.",
-            },
-        )
-    try:
-        parser = etree.XMLParser(resolve_entities=False, no_network=True)
-        etree.fromstring(xml_bytes, parser=parser)
-    except etree.XMLSyntaxError:
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "request": request,
-                "controls": [],
-                "grouped_controls": [],
-                "summary": None,
-                "coverage": None,
-                "upload_error": "Invalid XML file. Please upload a PAN-OS config.",
-            },
+            upload_error="Please upload a PAN-OS XML configuration file.",
         )
 
-    controls = evaluate_controls(xml_bytes)
-    summary = summarize(controls)
+    xml_bytes = await file.read()
+
+    # Parse exactly once, with entity resolution and network access disabled,
+    # then reuse this hardened root everywhere downstream.
+    xml_root, error = validate_and_parse(xml_bytes)
+    if error is not None:
+        return render(request, upload_error=error)
+
+    controls = evaluate_controls(xml_root)
     grouped_controls = group_controls(controls)
-    coverage = compute_policy_coverage(xml_bytes)
+    coverage = compute_policy_coverage(xml_root)
 
-    return templates.TemplateResponse(
+    return render(
         request,
-        "index.html",
-        {
-            "request": request,
-            "controls": controls,
-            "grouped_controls": grouped_controls,
-            "summary": summary,
-            "coverage": coverage,
-        },
+        controls=controls,
+        grouped_controls=grouped_controls,
+        coverage=coverage,
     )
