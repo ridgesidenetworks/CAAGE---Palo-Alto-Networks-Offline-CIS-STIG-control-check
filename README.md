@@ -84,17 +84,17 @@ No internet access required
 
 Step 1 - Download tar.gz package from the release page here: 
 ```text
-https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage.tar.gz
+https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage-1.2.tar.gz
 ```
 
 To download directly onto a linux host use the following
 ```bash
-wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/V1.1/caage.tar.gz
+wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage-1.2.tar.gz
 ```
 
 📁 Step 2 — Extract the Air-Gap Package
 ```bash
-tar -xzf caage.tar.gz
+tar -xzf caage-1.2.tar.gz
 cd caage
 ```
 🐍 Step 3 — Load the Python Base Image (Offline)
