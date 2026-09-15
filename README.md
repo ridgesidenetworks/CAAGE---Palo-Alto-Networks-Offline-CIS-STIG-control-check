@@ -28,43 +28,43 @@ No telemetry - No cloud dependencies - No outbound network calls - No external A
 
 All files remain on the local system for the duration of analysis.
 
-📦 Repository Structure
-```graphql
-panw-ngfw-bpa-airgap
-└── panw-ngfw-bpa
-    ├── app
-    │   ├── assets
-    │   │   ├── CAAGE.png
-    │   │   └── stig-shield.svg
-    │   ├── engine
-    │   │   ├── checks.py
-    │   │   ├── evaluator.py
-    │   │   └── registry.py
-    │   ├── templates
-    │   │   └── index.html
-    │   └── main.py
-    ├── Dockerfile
-    ├── python-3.12-slim.tar
-    ├── requirements.txt
-    └── wheels
-        ├── annotated_doc-0.0.4-py3-none-any.whl
-        ├── annotated_types-0.7.0-py3-none-any.whl
-        ├── anyio-4.14.0-py3-none-any.whl
-        ├── click-8.4.1-py3-none-any.whl
-        ├── fastapi-0.137.1-py3-none-any.whl
-        ├── h11-0.16.0-py3-none-any.whl
-        ├── idna-3.18-py3-none-any.whl
-        ├── jinja2-3.1.6-py3-none-any.whl
-        ├── lxml-6.1.1-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
-        ├── markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
-        ├── pydantic-2.13.3-py3-none-any.whl
-        ├── pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-        ├── python_multipart-0.0.32-py3-none-any.whl
-        ├── starlette-1.3.1-py3-none-any.whl
-        ├── typing_extensions-4.15.0-py3-none-any.whl
-        ├── typing_inspection-0.4.2-py3-none-any.whl
-        └── uvicorn-0.38.0-py3-none-any.whl
+You do not have to take that on trust. To confirm it yourself:
+```bash
+# CAAGE serves normally with no network attached at all.
+sudo docker run --rm -d --name caage-audit --network none \
+  -v $(pwd)/certs:/certs:ro caage:latest
 ```
+Or watch for traffic while running a real assessment:
+```bash
+sudo tcpdump -i docker0 -n 'not host 127.0.0.1' -c 50
+```
+No outbound packets should be observed. The application imports no HTTP client
+library, the XML parser runs with entity resolution and network access disabled
+so a malicious configuration file cannot trigger a callout, and the UI loads no
+external scripts, fonts or stylesheets.
+
+📦 Package Structure
+
+The release tarball extracts to `caage/`:
+```text
+caage
+├── README.md              deployment guide (this file, shipped offline too)
+├── CHANGELOG.md           what changed in this release
+├── LICENSE                Apache-2.0
+├── VERSION                bundle version
+├── Dockerfile
+├── requirements.txt       all 17 dependencies pinned, direct and transitive
+├── python-3.12-slim.tar   pre-downloaded base image
+├── wheels/                all Python dependencies as wheels
+└── app
+    ├── main.py
+    ├── engine/            checks.py, evaluator.py, registry.py
+    ├── templates/         index.html
+    └── assets/            CAAGE.png, stig-shield.svg
+```
+The `source/` directory in this repository mirrors the application code in the
+current release, so you can review it here before downloading anything.
+
 🧱 Air-Gapped Build Overview
 
 CAAGE supports fully offline container builds using:
@@ -82,19 +82,32 @@ Docker installed (docker.io or equivalent)
 
 No internet access required
 
-Step 1 - Download tar.gz package from the release page here: 
+📥 Step 1 — Download the Package
+
+This URL always resolves to the most recent release:
 ```text
-https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage-1.2.tar.gz
+https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/latest/download/caage.tar.gz
 ```
 
-To download directly onto a linux host use the following
+To download directly onto a linux host, along with its checksum file:
 ```bash
-wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/download/v1.2/caage-1.2.tar.gz
+wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/latest/download/caage.tar.gz
+wget https://github.com/ridgesidenetworks/CAAGE---Palo-Alto-Networks-Offline-CIS-STIG-control-check/releases/latest/download/SHA256SUMS
 ```
+
+🔎 Step 1a — Verify Before It Crosses the Air Gap
+
+Do this on the internet-connected host, **before** transferring:
+```bash
+sha256sum -c SHA256SUMS
+```
+Expect `caage.tar.gz: OK`. If it does not match, stop — do not carry the file
+across. The expected digest is also printed in the release notes, so you can
+confirm it from a second source.
 
 📁 Step 2 — Extract the Air-Gap Package
 ```bash
-tar -xzf caage-1.2.tar.gz
+tar -xzf caage.tar.gz
 cd caage
 ```
 🐍 Step 3 — Load the Python Base Image (Offline)
@@ -111,6 +124,8 @@ sudo docker images | grep python
 🔐 Step 4 — Create TLS Certificates (Outside the Container)
 
 CAAGE expects certificates to be mounted at runtime, not baked into the image.
+Replace `10.0.0.50` below with the IP address or DNS name you will actually
+browse to:
 ```bash
 mkdir certs
 openssl req -x509 -newkey rsa:4096 \
@@ -118,9 +133,15 @@ openssl req -x509 -newkey rsa:4096 \
   -out certs/server.crt \
   -days 365 \
   -nodes \
-  -subj "/CN=caage.local"
+  -subj "/CN=caage.local" \
+  -addext "subjectAltName=DNS:caage.local,IP:10.0.0.50"
 ```
-🏗️ Step 5 — Adjust certificate permisions so container user can read them (UID/GID 10001)
+> ⚠️ The `-addext subjectAltName` line is required. Chrome, Edge and Firefox
+> reject certificates that carry only a Common Name, and will refuse to connect
+> with `ERR_CERT_COMMON_NAME_INVALID`. You will still see the usual
+> self-signed warning, which is expected.
+
+🔑 Step 5 — Adjust certificate permisions so container user can read them (UID/GID 10001)
 ```bash
 # Change the group to match the container's internal ID
 sudo chgrp -R 10001 certs/
@@ -131,7 +152,7 @@ sudo chmod 640 certs/server.key   # Allows container to read the key
 sudo chmod 644 certs/server.crt   # Standard read access for the cert
 ```
 
-🏗️ Step 5 — Build the Container Image (Offline)
+🏗️ Step 6 — Build the Container Image (Offline)
 ```bash
 sudo docker build \
   --no-cache \
@@ -139,16 +160,25 @@ sudo docker build \
   -t caage:latest .
 ```
 
-▶️ Step 6 — Run CAAGE with TLS Enabled
+▶️ Step 7 — Run CAAGE with TLS Enabled
 ```bash
 sudo docker run -d \
   --name caage \
+  --cap-drop=ALL \
+  --security-opt no-new-privileges \
   -p 8443:8443 \
   -v $(pwd)/certs:/certs:ro \
   caage:latest
 ```
+To restrict access to the local host only, use `-p 127.0.0.1:8443:8443`.
+
 Note! If you get errors its likely that the container cannot mount your certs directory.  The below will run the container as your current user which likely made the cert files.
 ***ONLY RUN THIS IF THE ABOVE DOCKER RUN FAILED***
+
+> ⚠️ Run this from your normal user shell, never from a root shell. `$(id -u)`
+> is expanded by your shell before `sudo` runs, so from a root prompt it becomes
+> `--user 0:0` and the container runs as root, defeating the non-root design.
+> Fixing the Step 5 permissions is always the better answer.
 ```bash
 sudo docker run -d \
   --name caage \

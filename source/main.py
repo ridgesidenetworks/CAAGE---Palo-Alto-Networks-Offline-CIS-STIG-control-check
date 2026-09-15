@@ -10,12 +10,41 @@ from engine.evaluator import evaluate_controls, SECURITY_RULE_XPATH
 from engine.checks import _profile_groups, _rule_profile_name
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 # Resolve asset/template directories relative to this file so the app works
 # regardless of the process working directory.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = FastAPI()
+
+def _read_version():
+    """Read the bundle version from the VERSION file shipped alongside the app.
+
+    Single-sources the version so the git tag, the release tarball and the
+    string rendered in the UI cannot drift apart.
+    """
+    for candidate in (
+        os.path.join(BASE_DIR, "VERSION"),
+        os.path.join(os.path.dirname(BASE_DIR), "VERSION"),
+    ):
+        try:
+            with open(candidate, "r", encoding="utf-8") as handle:
+                value = handle.read().strip()
+            if value:
+                return value
+        except OSError:
+            continue
+    return "unknown"
+
+
+VERSION = _read_version()
+
+# The docs routes are disabled deliberately. FastAPI's Swagger UI and ReDoc
+# pages load JS/CSS from cdn.jsdelivr.net, fastapi.tiangolo.com and
+# fonts.googleapis.com, which would make an offline-only tool generate
+# outbound requests from the analyst's browser. CAAGE has no API consumers --
+# its only client is the form in index.html -- so the schema has no use here.
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.mount(
     "/assets",
     StaticFiles(directory=os.path.join(BASE_DIR, "assets")),
@@ -32,6 +61,7 @@ def render(request: Request, **context):
         "grouped_controls": [],
         "coverage": None,
         "upload_error": None,
+        "version": VERSION,
     }
     defaults.update(context)
     # Starlette >=1.0 signature: request first, then template name, then context.
@@ -96,6 +126,28 @@ def validate_and_parse(xml_bytes: bytes):
         return None, "Invalid XML file. Please upload a PAN-OS config."
 
     return xml_root, None
+
+
+async def read_capped(upload, limit: int):
+    """Read an upload into memory, stopping as soon as it exceeds ``limit``.
+
+    ``UploadFile.read()`` with no argument buffers the whole body regardless of
+    size. A client that omits Content-Length (chunked transfer encoding) skips
+    the header pre-check in ``assess``, so that unbounded read is reachable by
+    an unauthenticated caller. Reading in bounded chunks caps the allocation at
+    ``limit`` plus one chunk. Returns ``None`` when the upload is too large.
+    """
+    chunks = []
+    total = 0
+    while True:
+        chunk = await upload.read(UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def compute_policy_coverage(xml_root):
@@ -165,7 +217,11 @@ async def assess(request: Request, file: UploadFile = File(...)):
             upload_error="Please upload a PAN-OS XML configuration file.",
         )
 
-    xml_bytes = await file.read()
+    # Bounded read: the Content-Length pre-check above is absent on chunked
+    # requests, so the cap has to be enforced while reading, not after.
+    xml_bytes = await read_capped(file, MAX_UPLOAD_BYTES)
+    if xml_bytes is None:
+        return render(request, upload_error="File is too large for processing.")
 
     # Parse exactly once, with entity resolution and network access disabled,
     # then reuse this hardened root everywhere downstream.

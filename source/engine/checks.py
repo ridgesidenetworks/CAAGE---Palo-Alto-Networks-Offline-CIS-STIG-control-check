@@ -2825,7 +2825,9 @@ def check_malicious_ip_deny_rules(xml_root, rules):
 
 
 def check_default_policy_logging(xml_root, rules):
-    target = {"intrazone-default", "interzone-default"}
+    # Ordered, not a set: set iteration order varies with PYTHONHASHSEED,
+    # which would make finding order differ between runs and break report diffs.
+    target = ("intrazone-default", "interzone-default")
     found = {name: False for name in target}
     failures = []
 
